@@ -1,0 +1,32 @@
+# Site settings
+title:          Jinjoo
+description:    "Jinjoo's log"
+baseurl:        "/"
+url:            "https://jinjoochoi.github.io"
+
+# Author
+author:
+  name:         "Jinjoo Choi"
+  email:        "jinjoooooooo@gmail.com"
+  github_username: jinjoochoi
+  url:            "https://jinjoochoi.github.io"
+
+
+# Build settings
+markdown:       kramdown
+
+# Assets
+sass:
+  sass_dir:     _sass
+  style:        compressed
+
+# Gems
+plugins:
+  - jekyll-paginate
+
+# Permalinks
+permalink:      /:year-:month-:day/:title
+paginate:       5
+
+
+g-analytics: UA-115470668-1

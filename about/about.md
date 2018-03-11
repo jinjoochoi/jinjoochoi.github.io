@@ -28,6 +28,9 @@ permalink: /about/
 + eBook
 + <span style="color:#f60;">[Tahiti80](https://www.youtube.com/watch?v=oBiXdKU4gu8&list=RDoBiXdKU4gu8&t=2)</span> 🎧
 
+<br/>
+
 ## Link
 
 + [Github]("https://github.com/jinjoochoi")
++ [Tumblr]("http://fromjinjoo.tumblr.com/")

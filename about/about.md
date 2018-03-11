@@ -32,5 +32,5 @@ permalink: /about/
 
 ## Link
 
-+ [Github]("https://github.com/jinjoochoi")
-+ [Tumblr]("http://fromjinjoo.tumblr.com/")
++ [Github](https://github.com/jinjoochoi)
++ [Tumblr](http://fromjinjoo.tumblr.com/)

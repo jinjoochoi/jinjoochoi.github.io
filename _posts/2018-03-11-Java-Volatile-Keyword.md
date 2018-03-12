@@ -1,0 +1,215 @@
+---
+layout: post
+title: "[번역] Java Volatile Keyword"
+date:   2018-03-11
+author : Jinjoo
+---
+<br/>
+
+본 포스팅은 [Java Volatile Keyword]을 번역하여 작성했습니다.
+
+<br/>
+
+Java volatile 키워드는 "메인 메모리에 저장되는" Java 변수로 표시하고자할 때 사용됩니다. 즉, volatile 변수의 모든 읽기는 CPU cache가 아닌, 컴퓨터의 메인 메모리로부터 읽어오는 것이며, volatile 변수의 모든 쓰기는 CPU cache가 아닌, 메인 메모리에 기록된다는 것을 의미합니다.
+
+실제로, Java 5 volatile 키워드는 단지 메인 메모리에 쓰여지고 메인 메모리로부터 읽게 되는 것 이상의 의미를 가지는데 다음 섹션에서 설명하겠습니다.
+
+<br/>
+
+# 변수 가시성 문제
+Java volatile 키워드는 스레드를 넘어서 변수의 변화에 대한 가시성을 보장해줍니다. 조금 추상적으로 들릴지도 모릅니다. 조금 더 자세하게 설명하겠습니다.
+
+non-volatile 변수들이 작동하는 멀티스레드 어플리케이션에서 각 스레드들은 그들이 작업하는 동안 성능상의 이유로 메인메모리에서 CPU cache로 변수를 복사할 수 있습니다. 만약 당신의 컴퓨터가 하나 이상의 CPU를 갖고 있다면, 각 스레드는 다른 CPU에서 실행될 수 있습니다. 이는 각 스레드가 변수를 서로 다른 CPU의 CPU cache로 복사할 수 있음을 의미합니다. 여기에는 다음과 같은 내용이 설명되어 있습니다.
+
+![JMM](http://tutorials.jenkov.com/images/java-concurrency/java-volatile-1.png)
+
+non-volatile변수를 사용하면 JVM이 메인 메모리에서 CPU캐시로 데이터를 읽거나 CPU캐시에서 메인 메모리로 데이터를 쓰는 시점을 보장할 수 없습니다. 이는 다음 섹션에서 설명할 몇가지 문제를 야기할 수 있습니다.
+
+둘 이상의 스레드가 다음과 같이 선언된 카운터 변수를 포함하는 공유 객체에 접근하는 상황을 떠올려보십시오.
+
+{% highlight ruby %}
+public class SharedObject {
+    public int counter = 0;
+}
+{% endhighlight %}
+
+스레드 1이 카운터 변수를 증가시키지만, 스레드 1과 스레드 2가 카운터 변수를 수시로 읽을 수 있다는 것을 상상해 보십시오. 카운터 변수가 volatile으로 선언되지 않으면 카운터 변수 값이 CPU cache에서 메인 메모리로 다시 기록되는 시점에 대한 보증은 없습니다. 즉, CPU cache의 카운터 변수 값이 메인 메모리의 카운터 변수 값과 동일하지 않을 수 있다는 뜻입니다. 이 상황은 다음과 같습니다.
+
+![JMM](http://tutorials.jenkov.com/images/java-concurrency/java-volatile-2.png)
+
+다른 스레드가 아직 메인 메모리에 다시 기록하지 않았기 때문에 변수의 최신 값을 보지 못하는 스레드의 문제를 "가시성" 문제라고 합니다. 한 스레드의 업데이트는 다른 스레드에 보이지 않습니다.
+
+<br/>
+
+# Java Volatile 가시성 보장
+Java volatile 키워드는 변수 가시성 문제를 해결하기 위한 것입니다. 카운터 변수를 volatile로 선언하면 카운터 변수에 대한 모든 쓰기가 메인 메모리에 즉시 기록됩니다. 또한 카운터 변수의 모든 읽기는 메인 메모리에서 직접 읽게됩니다.
+카운터 변수의 volatile 선언 형식은 다음과 같습니다.
+
+{% highlight ruby %}
+public class SharedObject {
+    public volatile int counter = 0;
+}
+{% endhighlight %}
+
+따라서 volatile 변수를 선언하는 것은 해당 변수에 대한 다른 쓰기 스레드에 대한 가시성이 보장됩니다. 위에 주어진 시나리오에서 한 스레드(T1)가 카운터를 수정하고 다른 스레드(T2)가 카운터를 읽는 경우(절대 수정하지는 않는다), 카운터 변수를 volatile로 선언하는 것은 T2가 쓰기에 대한 가시성을 보장받기 위해 충분합니다.
+그러나 T1과 T2가 카운터 변수를 증가 시키면 카운터 변수를 volatile로 선언하는 것이 충분하지 않습니다. 나중에 더 설명하겠습니다.
+
+<br/>
+
+# volatile 모든 가시성 보장
+
+실제로 Java volatile의 가시성 보장은 volatile 변수 그 자체를 뛰어 넘습니다. 가시성 보장은 다음과 같습니다.
++ 스레드 A가 volatile 변수에 쓰고 이후에 스레드 B가 동일한 volatile 변수를 읽으면 volatile 변수를 쓰기 전에 스레드 A에서 볼 수 있는 모든 변수가 volatile 변수를 읽은 후에 스레드 B에서도 볼 수 있습니다.
++ 스레드 A가 volatile 변수를 읽으면, volatile 변수를 읽을 때 스레드 A가 볼 수 있는 모든 변수들 또한 메인 메모리에서 다시 읽어오게됩니다.
+
+코드와 함께 설명하겠습니다.
+
+{% highlight ruby %}
+public class MyClass {
+    private int years;
+    private int months
+    private volatile int days;
+
+
+    public void update(int years, int months, int days){
+        this.years  = years;
+        this.months = months;
+        this.days   = days;
+    }
+}
+{% endhighlight %}
+
+udpate()메서드는 3개의 변수를 씁니다. 이 중 days만 volatile입니다.
+volatile 모든 가시성 보장은 days에 값을 쓸 때, 스레드가 볼 수 있는 모든 변수도 메인 메모리에 기록됨을 의미합니다. 즉 days에 값을 쓸 때, years와 months도 메인 메모리에 기록됨을 의미합니다.
+years, month와 days를 읽을 때는 다음과 같을 수 있습니다.
+
+{% highlight ruby %}
+public class MyClass {
+    private int years;
+    private int months
+    private volatile int days;
+
+    public int totalDays() {
+        int total = this.days;
+        total += months * 30;
+        total += years * 365;
+        return total;
+    }
+
+    public void update(int years, int months, int days){
+        this.years  = years;
+        this.months = months;
+        this.days   = days;
+    }
+}
+{% endhighlight %}
+
+totalDays()메서드는 days의 값을 total 변수로 읽어들이며 시작됩니다. days변수를 읽을 때, months와 years의 값 또한 메인 메모리에서 읽어옵니다. 그러므로 위의 읽기 연산 순서대로 days, months와 years의 최신 값을 볼 수 있음을 보장받습니다.
+
+<br/>
+
+# 명령어 재배치 문제
+명령어의 의미론적(semantic) 의미가 동일하게 유지되는 한, Java VM과 CPU는 성능 상의 이유로 프로그램에서 명령어의 순서를 바꿀 수 있습니다. 다음의 명령어들을 보십시오.
+{% highlight ruby %}
+int a = 1;
+int b = 2;
+
+a++;
+b++;
+{% endhighlight %}
+
+이 명령어들은 프로그램의 의미론적(semantic) 의미를 잃지 않으며 다음과 같이 순서가 바뀔 수 있습니다.
+
+{% highlight ruby %}
+int a = 1;
+a++;
+
+int b = 2;
+b++;
+{% endhighlight %}
+
+그러나 명령어 재배치는 변수들 중 하나가 volatile 변수일 때 문제가 생깁니다. Java volatile 튜토리얼의 앞부분에 있는 예제 MyClass를 살펴 봅시다.
+
+{% highlight ruby %}
+public class MyClass {
+    private int years;
+    private int months
+    private volatile int days;
+
+
+    public void update(int years, int months, int days){
+        this.years  = years;
+        this.months = months;
+        this.days   = days;
+    }
+}
+{% endhighlight %}
+
+update()메서드가 days에 값을 쓰면, years와 months에 새롭게 쓰여진 값들 또한 메인 메모리에 기록됩니다. 하지만, Java VM이 이와 같이 명령어 순서를 바꾼다면 어떻게 될까요?
+
+{% highlight ruby %}
+public void update(int years, int months, int days){
+    this.days   = days;
+    this.months = months;
+    this.years  = years;
+}
+{% endhighlight %}
+
+days 변수가 수정될 때 months와 years도 여전히 메인 메모리로 기록됩니다. 하지만 이번에는 새 값이 months와 years에 쓰여지기 전에 발생합니다. 따라서 새로운 값들은 다른 스레드에 제대로 보이지 않습니다. 명령어 재배치의 의미론적(semantic) 의미가 변경되었습니다.
+
+Java는 다음 섹션에서 보게될 것처럼 이 문제에 대한 해결책을 가지고있습니다.
+
+<br/>
+
+# Java volatile Happens-Before 보장
+
+명령어 재배치 문제를 해결하기 위해서, Java volatile 키워드는 가시성 보증 외에도, "happens-before"를 보장해줍니다. happens-before는 다음을 보장해줍니다.
+
++ volatile 변수에 **쓰기 전** 에 원래 읽기 / 쓰기가 발생한 경우, 다른 변수에 대한 읽기 및 다른 변수에 대한 쓰기는 volatile 변수에 대한 쓰기 이후로 재배치 될 수 없습니다.
+volatile 변수에 쓰기 전의 읽기 / 쓰기는 volatile 변수에 대한 쓰기 "이전(happen before)"에 발생하도록 보장됩니다.
+예를 들어 다음과 같은 경우에도 여전히 가능하다는 점에 유의하십시오. volatile 쓰기 이후에 위치하는 다른 변수의 읽기 / 쓰기는 volatile 쓰기 전으로 재배치 될 수 있습니다. 반대는 아닙니다. 이후에서 이전으로는 허용되지만 이전에서 이후로는 허용되지 않습니다.
+
++ volatile 변수에 **읽기 후** 에 원래 읽기 / 쓰기가 발생한 경우, 다른 변수에 대한 읽기 및 다른 변수에 대한 쓰기는 volatile 변수에 대한 읽기 이전으로 재배치 될 수 없습니다.  예를 들어 다음과 같은 경우에도 여전히 가능하다는 점에 유의하십시오. volatile 읽기 전에 위치하는 다른 변수의 읽기 / 쓰기는 volatile 쓰기 후로 재배치 될 수 있습니다. 반대는 아닙니다. 이전에서 이후로는 허용되지만 이후에서 이전으로는 허용되지 않습니다.
+
+위의 happens-before 보장은 volatile 키워드의 가시성 보장이 시행되고 있음을 보장합니다.
+
+<br/>
+
+# volatile이 항상 충분한 것은 아니다
+
+volatile 키워드가 volatile 변수의 모든 읽기를 메인 메모리에서 직접 읽을 수 있고 volatile 변수에 대한 모든 쓰기가 메인 메모리에 직접 기록될 수 있게 보장하더라도, volatile 변수를 선언하는 것만으로는 충분치 않은 상황이 여전히 존재합니다.
+
+앞서 설명한 상황에서는 스레드 1만 공유 카운터 변수에 쓰기 연산을 하고, 카운터 변수 volatile을 선언하는 것으로 스레드 2에서 항상 최신 값을 확인하는 데에 충분했습니다.
+
+사실, 변수에 쓰여진 새로운 값이 이전 값에 의존하지 않는다면, 여러개의 스레드들은 공유 volatile 변수에 쓸 수 있고 메인 메모리에는 여전히 올바른 값이 저장되어 있습니다. 즉, 공유 volatile 변수에 값을 쓰는 스레드가 다음 값을 계산하기 위해 값을 읽지 않아도됩니다.
+
+스레드가 먼저 volatile 변수의 값을 읽어야 하고 이 값을 기반으로 하여 공유 volatile 변수에 대한 새 값을 생성하는 즉시, volatile 변수는 더 이상 가시성을 보장하지 않습니다.  volatile 변수의 읽기 연산과 새로운 값의 쓰기연산 사이의 짧은 시간 차가 여러개의 스레드가 volatile변수의 동일한 값을 읽고 변수에 대한 새로운 값을 생성하고 메인 메인 메모리에 기록할 때 다른 스레드의 값을 덮어쓰는 **경합조건(race condition)** 을 만듭니다.
+
+여러개의 스레드가 동일한 카운터를 증가시키는 상황은 확실히 volatile 변수로는 충분하지 않은 상황입니다. 다음 섹션에서는 이 사례를 자세히 설명합니다.
+
+스레드 1이 값이 0인 공유 카운터 변수를 CPU cache로 읽어 들이고, 이를 1로 늘리고 변경된 값을 메인 메모리에 다시 기록하지 않는 경우를 상상해 보십시오. 그러면 스레드 2는 메인 메모리에서 변수 값이 여전히 0인 동일한 카운터 변수를 자신의 CPU cache로 읽어 들일 수 있습니다. 그런 다음, 스레드 2는 카운터를 1까지 늘릴 수 있으며, 또한 다시 메인 메모리에 기록하지 못 할 수 있습니다. 이러한 상황은 아래 다이어그램에 설명되어 있습니다.
+
+![JMM](http://tutorials.jenkov.com/images/java-concurrency/java-volatile-3.png)
+
+스레드 1과 스레드 2가 사실상 동기화되지 않은 상태입니다. 공유 카운터 변수의 실제 값은 2여야 하지만 각 스레드에는 해당 CPU cache의 변수의 값은 1이고 메인 메모리에서는 값이 여전히 0입니다. 엉망 진창입니다! 스레드가 공유 카운터 변수의 값을 메인 메모리에 다시 기록하는 경우에도, 값이 잘못될 수 있습니다.
+
+<br/>
+
+# 언제 volatile이 충분할까요?
+
+앞서 언급했듯이 두개의 스레드가 공유 변수에 대한 읽기 및 쓰기를 모두 수행하는 경우 이에 대한 volatile 키워드를 사용하는 것으로는 충분하지 않습니다. 이 경우에는 **synchronized** 를 사용하여 변수를 읽고 쓰는 작업이 원자(atomic)로 이루어지도록 해야 합니다. volatile 변수를 읽거나 쓸 때는 스레드 읽기 또는 쓰기가 차단(block)되지 않습니다. 이 경우에는 임계구역에서 **synchroinzed** 키워드를 사용해야 합니다.
+
+synchroinzed 블록 대신 Java.util.concurrent패키지에 있는 많은 원자(atomic) 데이터 유형 중 하나를 사용할 수도 있습니다. 예를 들어 AtomicLong또는 AtomicReference또는 다른 항목 중 하나가 있습니다.
+
+오직 한 스레드만 volatile variable을 읽고 쓰고 다른 스레드들은 오로지 변수를 읽기만 한다면, 읽기 스레드는 volatile에 쓰여진 최신 값을 볼 수 있음을 보장받습니다. volatile 변수를 만들지 않고는 보장받을 수 없습니다.
+
+volatile 키워드는 32bit 와 64bit에서 동작합니다.
+
+<br/>
+
+# volatile에 대한 성능 고려사항
+
+volatile 변수에 대한 읽기와 쓰기는 메인 메모리 부터 값를 읽거나 메인 메모리에 값을 쓰게 됩니다. 메인 메모리에서 읽고 쓰는 것이 CPU cache에 접근 하는 것보다 더 비쌉니다. volatile 변수에 접근하면 정상적인 성능 향상 기술인 명령어 재배치를 할 수 없습니다. 따라서 변수의 가시성의 보장이 필요할 때만 volatile 변수를 사용해야 합니다.
+
+
+[Java Volatile Keyword]: http://tutorials.jenkov.com/java-concurrency/volatile.html

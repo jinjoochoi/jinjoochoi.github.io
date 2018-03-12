@@ -45,7 +45,7 @@ AtomicReference는 'synchroinzed' 보다 기술적으로 더 간단하고 빨라
 
 <br/>
 
-# '내부 클래스(Inner Class) 접근법
+# '내부 클래스(Inner Class)' 접근법
 
 Java에서는 클래스 초기화가 '필요에 따른(on-demand)'으로, 클래스가 처음 사용될 때 수행됩니다. 보통, 이런 기본적인 행동은 별로 관심이 없습니다.. 하지만 우리가 그것을 사용할 수 있을까요?
 

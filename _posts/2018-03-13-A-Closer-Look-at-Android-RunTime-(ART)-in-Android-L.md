@@ -1,0 +1,69 @@
+---
+layout: post
+title: "[번역] A Closer Look at Android RunTime (ART) in Android L"
+date:   2018-03-12
+author : Jinjoo
+---
+<br/>
+
+본 포스팅은 [A Closer Look at Android RunTime (ART) in Android L] 을 번역하여 작성했습니다.
+
+<br/>
+
+![ART](https://images.anandtech.com/doci/8231/Android-L-ART_678x452.png)
+
+<br/>
+
+최근 I/O 컨퍼런스에서 Google은 마침내 안드로이드에 대한 새로운 런타임 계획을 공식 발표했습니다. Android RunTime, ART는 Android Java 코드가 실행되는 가상 머신인 Dalvik의 후속 버전이며 대체재입니다. 지난 가을부터 KitKat 기기에서 이용 가능한 추적과 미리보기(previews)가 있었지만, Google에서 기술적 세부사항 과 Google이 이를 통해 나아가고 있는 방향에 대한 정보가 많지 않았습니다.
+
+그들의 특정 하드웨어 아키텍처에 맞게 컴파일된 소프트웨어를 실행하는 iOS, Windows 또는 Tizen과 같은 다른 모바일 플랫폼과 달리, Android 소프트웨어 대부분이 "byte-code"에서 자신의 하드웨어에 해당하는 native 명령어로 변환되는 generic code language를 기반으로합니다.
+
+초기 Android 버전부터 수년동안, Dalvik은 복잡성이 거의없는 단순한 VM으로 시작했습니다. 그러나 시간이 지나면서 Google은 성능 문제를 해결해야 하고 하드웨어 발전에 뒤쳐지지 않아야 할 필요성을 느꼈습니다. 결국 구글은 안드로이드의 2.2 릴리즈와 함께 Dalvik에 JIT-complier를 추가하고, multi-threading 기능을 추가했으며, 서서히 향상시키고자 노력했습니다.
+
+그러나, 최근 몇년 동안 생태계가 Dalvik 개발을 능가해서 구글은 미래를 위해 견고한 기반이 되는 현재의 성능과 미래의 8-core 기기, 대용량 스토리지 역량과 대형 작업 메모리까지 확장시킬 수 있는 새로운 것을 만들기 위해 노력했습니다.
+
+그렇게 ART가 나오게 되었습니다.
+
+<br/>
+
+<br/>
+
+# Architecture
+
+<br/>
+
+![ART Architecture](https://lh5.googleusercontent.com/MxH8wXEbpzjhfDzbDY52F8jp87ciFPaQxMPQN6xQvzRitaH_hQNarzkK90O3HYfieEPX8g1J2BlxmlSZwbAs5jrqiKeRNfnSmdW1OCKXG6DDmpDm_xA5XRGYDyuVx_50VA)
+
+<br/>
+
+
+먼저, ART는 Dalvik의 기존 byte-code 형식 인 "dex"(Dalvik 실행 파일)과 완벽하게 호환되도록 설계되었습니다. 따라서 개발자의 관점에서는, 하나 또는 또다른 런타임에 대한 애플리케이션을 작성해야하는 것과 관련하여 전혀 변화가 없고 호환성에 대해서도 전혀 걱정할 필요가 없습니다.
+
+ART가 가져오는 큰 패러다임의 전환은 JIT(just-in-Time)컴파일러 대신에 어플리케이션 코드를  미리 (Ahead-of-Time (AOT)) 컴파일한다는 것입니다. 런타임에는 애플리케이션을 실행할 때마다 바이트 코드를 기본 코드로 컴파일해야 하며, 여기서는 한번만 실행하면 되며, 이때 이후의 실행은 기존의 컴파일된 네이티브 코드에서 이루어집니다.
+
+물론 애플리케이션의 native 변환물(translations) 은 공간을 차지합니다. 이 새로운 방법론은  안드로이드 기기의 초기 단계에서부터 사용 가능한 스토리지 공간이 엄청나게 증가했기 때문에 가능해진 것입니다.
+
+이러한 변화는 과거에는 불가능했던 많은 최적화를 가능하게 합니다. 코드가 단번에 최적화되고 컴파일되기 때문에 한번에 정말 잘 최적화 할만한 가치가 있습니다. Google은 컴파일러가 현재 JIT 컴파일러는 오로지 local/mothod 덩어리(chunks)만 최적화를 했던 것과는 반대로, 코드 전체를 살펴보고 있기 때문에, 이제 애플리케이션 코드 기반 전체에 대해 더 높은 수준 최적화를 달성할 수 있다고 주장합니다. 코드 내 exception checks와 같은 오버 헤드는 크게 제거되며, 메서드 및 인터페이스 호출 속도가 대폭 빨라집니다. 이를 위한 프로세스는 새로운 "dex2oat" 컴포넌트고, Dalvik의 "dexopt"를 대체합니다. Odex 파일(optimized dex)는 또한 ART에서 사라지고 이는 [ELF] 파일에 의해 대체됩니다.
+
+ART가 ELF 실행 파일을 컴파일하기 때문에, 이제 커널은 코드 페이지의 페이지 처리를 다룰 수 ​​있습니다. - 이는 메모리 관리가 훨씬 나아지고 메모리 사용량도 줄어드는 결과를 가져옵니다. [KSM (Kernel same-page merging)]의 효과가 ART에 어떤 영향을 미치는지 궁금합니다. 확실히 눈여겨 봐야 할 부분입니다.
+
+배터리 수명에 미치는 영향도 중요합니다. - 앱의 runtime 동안에 해석(interpretation)이나 JIT 작업이 더 이상 필요하지 않기 때문에, CPU cycles과 전력 소비를 직접 절감 할 수 있습니다.
+
+단점은 이 일회성(one-time) 컴파일이 완료하는 데 더 많은 시간이 걸린다는 것입니다. 기기의 첫 번째 부팅과 애플리케이션의 첫 시작은 Dalvik 시스템과 비교하여 훨씬 향상 될 것입니다. Google은 이러한 측면에서 드라마틱하지는 않아도, Dalvik보다 완성된 운송 런타임(finished shipping runtime)이 Dalvik과 비슷하거나 Dalvik보다 훨씬 더 빠를 것이라고 주장합니다.
+
+<br/>
+
+![Performance](https://lh3.googleusercontent.com/V4HzsyjzVoNmCWC-CgSjD63oBIQdtDySbUDyi77YPQz_fZ4zjPKTYms9NMCj1T5yDu-WXTUGwPWy7DVyd1OPqLfFTbZ1-q1MxLEaLxsKeM5_O5aGI2KdsLHi55GYgTxvvQ)
+
+<br/>
+
+위의 그림과 같이 Dalvik에 비해 큰 성능 향상 효과를 거둘 수 있으며, 이를 통해 VM에서 실행되는 코드의 속도가 약 2배 향상됩니다. 구글은 거의 3배나 증가한 체스와 같은 애플리케이션들이 안드로이드 L의 최종 버전이 릴리즈되면 기대할 수 있는 실제 이득의 대표적인 대상(projection)이라고 주장했다.
+
+
+
+
+[A Closer Look at Android RunTime (ART) in Android L]: https://www.anandtech.com/show/8231/a-closer-look-at-android-runtime-art-in-android-l
+
+[ELF]: https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
+
+[KSM (Kernel same-page merging)]: https://en.wikipedia.org/wiki/Kernel_same-page_merging

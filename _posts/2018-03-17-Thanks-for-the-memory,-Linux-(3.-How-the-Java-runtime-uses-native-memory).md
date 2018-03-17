@@ -1,0 +1,102 @@
+---
+layout: post
+title: "[번역] Thanks for the memory, Linux (3. How the Java runtime uses native memory)"
+date:   2018-03-17
+author : Jinjoo
+---
+<br/>
+
+본 포스팅은 [Thanks for the memory, Linux] 을 번역하여 작성했습니다.
+
+<br/>
+### 자바 런타임은 어떻게 native memory를 사용할까.
+
+자바 런타임은 이전 섹션에서 강조한 하드웨어와 OS 제약조건을 따르는 OS 프로세스입니다.
+자바 런타임 환경은 모든 상황에서 런타임 환경이 어떤 리소스를 필요로 할 것인지 예측할 수 없게 하는 사용자의 코드를 구동하는 기능을 제공합니다. Java 어플리케이션이 관리되는 Java 환경에서 수행하는 모든 액션은 해당 환경을 제공하는 런타임의 리소스 요구에 잠재적으로 영향을 줄 수 있습니다. 이 섹션에서는 어떻게 Java 어플리케이션이 native memory를 사용하는지 그리고 어떻게 native memory를 사용하는지에 대해서 설명하겠습니다.
+
+<br/>
+### Java heap과 garbage collection
+
+Java 힙은 객체가 할당되는 메모리 영역입니다. 비록 몇몇의 Real Time Specification for Java(RTSJ)를 구현한 것과 같은 전문 Java runtime은 여러개의 heap을 가지고있지만 대부분은 하나의 logical heap을 가집니다. single physical heap은 heap memory를 관리하는 garbage collection (GC) 알고리즘의 필요에 따라 logical 섹션으로 나누어 질 수 있습니다. 이 섹션은 Java memory manager(garbage collector를 포함하는)의 통제하에 있는 native 메모리의 인접한 slabs로 구현됩니다.
+
+-Xmx와 -Xms옵션을 사용는 Java 커맨드 라인으로 부터 heap의 크기는 조절됩니다. (mx는 힙의 최대 크기, ms는 초기의 크기를 뜻합니다.) 비록 logical 힙이 객체의 수와 GC를 수행하는 데 걸리는 시간에 따라 늘어나고 줄어들 수 있을 지라도, native 메모리의 크기는 일정하게 유지되며 최대 힙의 크기를 나타내는 -Xmx값에 의해 결정됩니다. 대부분의 GC 알고리즘은 연속적인 메모리 slab으로 할당된 힙에 의존하기 때문에, heap을 확장해야 할 때 native memory를 조금 더 할당하는 것은 불가능합니다. 모든 heap 메모리는 우선적으로 예약(reserved)되어야 합니다.
+
+native 메모리를 예약하는 것(Reserving)은 그것을 할당하는 것과는 다릅니다. native memory가 예약(reserved)될 때, physical 메모리 또는 다른 스토리지가 지원되지 않습니다. 주소 공간의 일부(chunks)를 예약하는(reserving)것이 physical 리소스를 소모하지 않지만, 메모리가 다른 용도로 사용되는 것을 막습니다. 전혀 사용되지 않는 예약 메모리(reserving memory)로 인한 누수는 할당된 메모리 누수만큼이나 심각합니다.
+
+몇몇의 garbage collector은 힙의 사용된 영역이 축소됨에 따라 힙의 일부를 decommitting (백업용 백업 스토리지 해제) 하는 방법으로 physical 메모리 사용을 최소화합니다.
+
+Java 힙을 유지하는 메모리 관리 시스템의 상태를 유지하려면 더 많은 native 메모리가 필요합니다. garbage를 수거할 때 free storage를 추적하고 진행 상황을 기록하기 위해 자료구조(data structures)가 할당되어야 합니다. 이러한 데이터 구조의 정확한 크기와 특성은 구현에 따라 달라지지만, 대부분은 힙의 크기에 비례합니다.
+
+<br/>
+
+### Just-in-time (JIT) 컴파일러
+
+JIT 컴파일러는 런타임에 Java 바이트 코드를 최적화된 native 실행 가능(executable) 코드로 컴파일합니다. 이는 Java 런타임의 런타임 속도가 크게 향상되고 Java 어플리케이션이 native 코드와 유사한 속도로 실행되게 합니다.
+
+바이트 코드 컴파일은 native 메모리 (gcc와 같은 정적 컴파일러가 메모리를 구동시키는 것과 동일한 방식으로)를 사용하지만, 입력(바이트 코드)과 출력(실행 코드)도 JIT에 저장됩니다. JIT로 컴파일 된 메소드를 많이 포함하는 Java 어플리케이션은 적게 포함하는 어플리케이션보다 더 많은 native 메모리를 사용합니다.
+
+<br/>
+
+### Class와 Classloader
+Java 어플리케이션은 객체 구조와 메서드 로직을 정의하는 클래스로 구성됩니다. 그들은 또한 Java 런타임 클래스 라이브러리(java.lang.String과 같은)의 클래스를 사용하고, third-party 라이브러리를 사용할 수 있습니다. 이러한 클래스는 사용되는 동안 메모리에 저장되어야 합니다.
+
+클래스 저장 방법은 구현에 따라 달라집니다. Sun JDk는 permanent generation(PermGen) 힙 영역을 사용하고 있습니다. IBM은 Java 5부터 각 클래스 로더에 네이티브 메모리의 slabs를 할당하고 클래스 데이터를 거기에 저장합니다. 현대 Java 런타임은 주소 공간에 공유 메모리 영역을 매핑하는 클래스 공유(class sharing)같은 기술을 사용합니다. 이러한 할당 메커니즘이 Java 런타임의 native 공간(footprint)에 미치는 영향을 이해하려면, 해당 구현에 대한 기술 문서를 읽어 보십시오. 그러나, 보편적인 진실은 모든 구현에 영향을 미칩니다.
+
+기본적으로, 더 많은 클래스를 사용하면 더 많은 메모리를 사용하게 됩니다. (이는 native 메모리 사용량이 늘어났다거나 모든 클래스가 들어갈 수 있도록 PermGen 또는 공유 클래스 캐시와 같은 영역의 크기를 명시적으로 조정해야 함을 의미합니다.) 어플리케이션만 맞춰야 할 것이 아니라 프레임워크, 어플리케이션 서버, third-party와 Java 런타임에도 온디맨드 방식으로 로드되고 공간을 차지하는 클래스가 포함할 수 있도록 맞춰야합니다. Java런타임은 클래스를 언로드하여 공간을 재확보할 수 있지만 엄격한 조건 하에서만 가능합니다. single class를 언로드하는 것은 불가능합니다. 대신에 클래스로더를 그들이 로드한 클래스와 함께 언로드 할 수 있습니다. 다음과 같은 경우에만 클래스 로더를 언로드 할 수 있습니다:
+
+- Java heap이 classloader를 나타내는 java.lang.ClassLoader 객체에 대한 참조를 포함하고 있지 않을 경우.
+- Java heap이 classloader에 의해 로드된 클래스를 나타내는 java.lang.Class 객체에 대한 어떠한 참조도 갖지 않고 있을 경우.
+- 클래스로더에 의해 로드된 클래스의 객체가 Java heap에서 활성(참조된) 상태가 아닌 경우.
+
+<br/>
+
+Java 런타임이 bootstrap, extension과 어플리케이션과 같은 모든 Java 어플리케이션에 대해 생성하는 세 가지 기본 클래스 로더가 이러한 기준을 결코 충족시킬 수 없다는 점은 주목할 가치가 있습니다. 그러므로, java.lang.String과 같은 시스템 클래스나 어플리케이션 클래스 로더를 통해로드된 모든 어플리케이션 클래스는 런타임에 해제 될 수 없습니다.
+
+클래스 로더가 수집에 적합한 경우에도 런타임은 GC cycle의 일부로서 클래스 로더를 수집합니다. 몇몇 구현에서는 오로지 일부 GC cycle에서만 클래스로더를 언로드합니다.
+
+당신이 실현시키지 않아도, 런타임에 클래스가 생성되는 것이 가능합니다. 많은 JEE 어플리케이션에서는 JSP(JavaServerPage)기술을 사용해 웹 페이지를 생성합니다. JSP는 각.jsp페이지에 대한 클래스를 생성하며, 이 클래스는 그들을 로드한 클래스 로더의 수명(lifetime) 동안 지속됩니다(일반적으로 웹 어플리케이션의 수명).
+
+class를 생성하는 또 다른 방법은 Java reflection을 이용하는 것 입니다. Java 구현에 따라서 reflection이 작동하는 방식은 다양하지만, Sun과 IBM에서 사용하는 메서드에 대해서 지금 설명하겠습니다.
+
+java.lang.reflect API를 사용할 때, java 런타임은 reflecting 객체(java.lang.reflect.Field와 같은)의 메서드를 객체 또는 reflect될 클래스로 연결해야 합니다. 이는 설정은 적게 필요하지만 느린 Java Native Interface(JNI) 접근자를 사용하거나 런타임에 reflect할 각 객체 타입에 대한 클래스를 동적으로 생성하면서 수행될 수 있습니다. 후자의 방식은 설정하는 데에는 느리지만 실행시킬 때는 더 빠르고, 특정 클래스가 자주 reflect되는 어플리케이션이라면 이상적인 방식입니다.
+
+Java 런타임은 클래스가 relfect되는 처음 몇 번 JNI 메서드를 사용하지만, 여러 번 사용 된 후에 접근자는 클래스를 빌딩하고 새로운 클래스 로더를 통해 로드하는 바이트 코드 접근자(bytecode accessor)로 확장(inflate)됩니다. 리플렉션을 많이하면 많은 접근자(accessor) 클래스와 클래스 로더를 생성시킬 수 있습니다. reflecting된 객체에 대한 참조를 보유하는 것은 이 클래스들을 활성상태(alive)로 유지하고 계속해서 공간을 차지하게 만듭니다. 바이트 코드 접근자(accessor)를 만드는 것은 꽤 느리기 때문에 Java 런타임은 나중에 사용할 수 있도록 이러한 접근자를 캐시(cache) 할 수 있습니다. 일부 어플리케이션과 프레임워크는 또한 reflecting 객체도 캐시를 하면서, 그들의 native footprint를 증가시킵니다.
+
+<br/>
+### JNI
+
+JNI는 native code(C와 C++ 같이 native 컴파일된 언어로 작성된 어플리케이션)가 Java 메소드를 호출할 수 있도록 해주고 반대도 가능하게 해줍니다. Java 런타임은 파일과 네트워크 I/O와 같은 class-library 기능을 구현하기 위해서 JNI 코드에 강하게 의존합니다. JNI 어플리케이션은 Java 런타임의 native footprint를 다음과 같이 세 가지 방식으로 증가시킬 수 있습니다:
+
+- JNI 어플리케이션에 대한 native code는 공유 라이브러리 혹은 프로세스 주소 공간에 로드되는 실행파일로 컴파일 됩니다. 더 큰 native 어플리케이션은 간단히 로드함으로서, 프로세스 주소 공간의 상당한 부분을 차지할 수 있습니다.
+
+- native 코드는 Java runtime과 주소 공간을 공유해야 합니다. native code에 의해 수행되는 native 메모리 할당 혹은 메모리 매핑은 Java 런타임으로 부터 메모리를 가져갑니다.
+
+- 특정 JNI 함수는 그들의 일반 오퍼레이션의 일부처럼 native 메모리를 사용할 수 있습니다. GetTypeArrayElements와 GetTypeArrayRegion 함수는 native 코드가 잘 동작하도록 Java heap data를 native 메모리 버퍼로 복사할 수 있습니다. 복사를 하는지 안하는지는 runtime 구현에 따라 다릅니다. (Java 5.0 이상의 IBM Developer Kit는 native 복사를 합니다.) 이런 방식으로 Java 힙 데이터의 많은 양에 접근하면, 그에 따라 native heap의 상당 부분을 사용할 수 있습니다.
+
+<br/>
+### NIO
+
+Java 1.4에 도입된 새로운 I/O (NIO)는 채널과 버퍼를 기반으로 I/O를 수행하는 새로운 방식을 추가하였습니다. Java heap에서 메모리에 의해 백업되는 I/O buffer 뿐만 아니라, NIO는 Java 힙 대신에 native 메모리에 백업되는 direct ByteBuffers (java.nio.ButeBuffer.allocateDirect()메서드에 의해 할당되는)에 대한 지원을 제공했습니다.
+
+direct ByteBuffer 데이터가 어디에 저장되는지에 대해서 혼란스러울 수 있습니다. 어플리케이션은 I/O 오퍼레이션을 수행하는데 여전히 Java heap의 객체를 사용하지만, 데이터를 담고있는 버퍼는 native 메모리에 저장됩니다. 즉 Java heap 객체는 native heap buffer를 참조만 합니다. non-direct ByteBuffer는 데이터를 Java heap의 byte[]배열에 보유하고 있습니다.
+그림 4는 direct와 non-direct ByteBuffer 객체의 차이점을 보여줍니다.
+
+그림 4. direct와 non-direct java.nio.ByteBuffers에 대한 메모리 토폴로지
+
+![memorytopology](https://www.ibm.com/developerworks/library/j-nativememory-linux/bytebuffers.gif)
+
+ByteBuffer 객체는 직접 버퍼를 자동으로 정리하지만 Java 힙 GC의 일부로서도 정리될 수 있습니다. 따라서 그들은 native heap에 대한 압력에 자동으로 반응하지 않습니다. GC는 Java힙이 가득 차서 heap-allocation 요청을 처리할 수 없거나 Java 어플리케이션이 명시적으로 이를 요청하는 경우에만 발생합니다. (이는 성능문제를 일으키기 때문에 추천하지 않습니다)
+
+걷잡을 수 없는 경우에는 native 힙이 가득 차서 하나 이상의 direct ByteBuffers가 GC 대상이 될 수 있지만(native 힙의 공간을 확보할 수 있음), Java힙이 거의 비어 있지 않아서 GC는 발생하지 않습니다.
+
+<br/>
+### 스레드
+
+어플리케이션의 모든 스레드는 자신의 스택(로컬 변수와 함수를 호출할 때 유지해야하는 상태를 저장하기 위해 사용되는 메모리 영역)을 저장하기 위한 메모리를 필요로 합니다. 모든 자바 스레드는 실행하기 위해서 스택 공간을 필요로 합니다. 구현에 따라서, 자바 스레드는 개별 native와 자바 스택들 가질 수 있습니다. 스택 공간과 외에도, 각 스레드는 thread-local 스토리지와 내부 데이터 구조를 위한 native 메모리를 필요로 합니다.
+
+스레드 크기는 Java 구현과 아키텍처에 따라 다양합니다. 몇몇 구현체는 Java thread를 위한 스택의 크기를 지정할 수 있게 해줍니다. 256KB와 756KB 사이의 값이 일반적입니다.
+
+비록 스레드 당 사용되는 메모리의 양이 매우 적어도, 수백개의 스레드가 있는 어플리케이션의 경우 스레드 스택의 총 메모리 사용량은 클 수 있습니다. 실행할 수 있는 프로세서보다 더 많은 스레드로 어플리케이션을 실행하는 것은 대개 비효율적이며, 성능이 저하되고 메모리 사용량이 증가할 수 있습니다.
+
+
+[Thanks for the memory, Linux]:https://www.ibm.com/developerworks/library/j-nativememory-linux/

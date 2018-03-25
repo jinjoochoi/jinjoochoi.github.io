@@ -4,6 +4,7 @@ layout: default
 
 <div class="catalogue">
   {% for post in paginator.posts %}
+  {% if post.post%}
     <a href="{{ post.url }}" class="catalogue-item">
       <div>
         <time datetime="{{ post.date }}" class="catalogue-time">{{ post.date | date: "%B %d, %Y" }}</time>
@@ -16,6 +17,7 @@ layout: default
 
       </div>
     </a>
+  {% endif %}
   {% endfor %}
 </div>
 

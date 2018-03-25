@@ -3,6 +3,7 @@ layout: post
 title: "[번역] Fastest Thread-safe Singleton in Java"
 date:   2018-03-12
 author : Jinjoo
+post : true
 ---
 <br/>
 

@@ -3,6 +3,7 @@ layout: post
 title: "[번역] Thanks for the memory, Linux (3. How the Java runtime uses native memory)"
 date:   2018-03-17
 author : Jinjoo
+post : true
 ---
 <br/>
 

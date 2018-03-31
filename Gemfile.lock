@@ -45,6 +45,9 @@ GEM
     jekyll-gist (1.5.0)
       octokit (~> 4.2)
     jekyll-paginate (1.1.0)
+    jekyll-paginate-multiple (0.1.0)
+      jekyll (>= 2.5)
+      jekyll-paginate (~> 1.1)
     jekyll-sass-converter (1.5.2)
       sass (~> 3.4)
     jekyll-seo-tag (2.4.0)
@@ -111,6 +114,8 @@ PLATFORMS
 DEPENDENCIES
   jekyll (~> 3.7.3)
   jekyll-feed (~> 0.6)
+  jekyll-paginate (~> 1.1.0)
+  jekyll-paginate-multiple (~> 0.1.0)
   minima (~> 2.0)
   minimal-mistakes-jekyll
   tzinfo-data

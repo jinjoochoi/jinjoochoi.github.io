@@ -23,21 +23,25 @@ sass:
 # Gems
 plugins:
   - jekyll-paginate
+  - jekyll-paginate-multiple
 
-# Permalinks
+# Permalink
 permalink:      /:year-:month-:day/:title
-paginate:       5
 
+
+# Pagination
+paginate_multiple:
+  - paginate: 5
+    paginate_path: "/page:num/"
+    sub_dir: '/post'
+  - paginate: 12
+    paginate_path: '/film/page:num/'
+    sub_dir: '/film'
+
+# Collections
 collections:
-  films:
+  film:
     output: true
-    permalink: /films/:name
 
-defaults:
-  - scope:
-      path: ""
-      type: "films"
-    values:
-      layout: film
-
+# Analytics
 g-analytics: UA-115470668-1

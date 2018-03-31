@@ -26,11 +26,17 @@
 // By default each .column within a .row will evenly take up
 // available width, and the height of each .column with take
 // up the height of the tallest .column in the same .row
+
 .row {
 	display: flex;
-	flex-direction: column;
-	width: 100%;
+	flex-direction: row;
+	margin-left: -1.0rem;
+	width: calc(100% + 2.0rem);
 
+	.column {
+		margin-bottom: inherit;
+	}
+	
 	&.row-no-padding {
 		padding: 0;
 
@@ -183,22 +189,6 @@
 
 		.column-center {
 			align-self: center;
-		}
-	}
-}
-
-// Larger than mobile screen
-@media (min-width: 40.0rem) { // Safari desktop has a bug using `rem`, but Safari mobile works
-
-	.row {
-		flex-direction: row;
-		margin-left: -1.0rem;
-		width: calc(100% + 2.0rem);
-
-		.column {
-			margin-bottom: inherit;
-			flex: 0 0 33.3333%;
-			max-width: 33.3333%;
 		}
 	}
 }

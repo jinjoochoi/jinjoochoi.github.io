@@ -28,5 +28,16 @@ plugins:
 permalink:      /:year-:month-:day/:title
 paginate:       5
 
+collections:
+  films:
+    output: true
+    permalink: /films/:name
+
+defaults:
+  - scope:
+      path: ""
+      type: "films"
+    values:
+      layout: film
 
 g-analytics: UA-115470668-1

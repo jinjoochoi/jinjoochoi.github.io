@@ -36,7 +36,7 @@
 	.column {
 		margin-bottom: inherit;
 	}
-	
+
 	&.row-no-padding {
 		padding: 0;
 
@@ -73,7 +73,7 @@
 
 	.column {
 		// IE 11 required specifying the flex-basis otherwise it breaks mobile
-		flex: 1 1 auto;
+		flex: 1 1 33%;
 		margin-left: 0;
 		max-width: 100%;
 		width: 33%;

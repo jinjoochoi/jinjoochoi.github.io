@@ -4,7 +4,6 @@ layout: default
 
 <div class="film_roll">
 {% for post in paginator.posts %}
-  {% if post.film %}
       {% cycle 'add row' : '<div class="row">', '', '' %}
           <div class="column column-33">
               <div class="preview-panel">
@@ -14,7 +13,6 @@ layout: default
              </div>
           </div>
       {% cycle 'end row' : '', '', '</div>' %}
-  {% endif %}
 {% endfor %}
 {% cycle 'end row' : '', '</div>', '</div>' %}
 

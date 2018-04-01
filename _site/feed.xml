@@ -1,0 +1,647 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.7.3">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2018-04-01T21:40:30+09:00</updated><id>http://localhost:4000/</id><title type="html">DOGSEAR</title><subtitle>Jinjoo's log</subtitle><author><name>Jinjoo Choi</name><email>jinjoooooooo@gmail.com</email></author><entry><title type="html">[번역] Thanks for the memory, Linux (3. How the Java runtime uses native memory)</title><link href="http://localhost:4000/post/2018/03/17/Thanks-for-the-memory,-Linux-(3.-How-the-Java-runtime-uses-native-memory).html" rel="alternate" type="text/html" title="[번역] Thanks for the memory, Linux (3. How the Java runtime uses native memory)" /><published>2018-03-17T00:00:00+09:00</published><updated>2018-03-17T00:00:00+09:00</updated><id>http://localhost:4000/post/2018/03/17/Thanks-for-the-memory,-Linux-(3.-How-the-Java-runtime-uses-native-memory)</id><content type="html" xml:base="http://localhost:4000/post/2018/03/17/Thanks-for-the-memory,-Linux-(3.-How-the-Java-runtime-uses-native-memory).html">&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;본 포스팅은 &lt;a href=&quot;https://www.ibm.com/developerworks/library/j-nativememory-linux/&quot;&gt;Thanks for the memory, Linux&lt;/a&gt; 을 번역하여 작성했습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;h3 id=&quot;자바-런타임은-어떻게-native-memory를-사용할까&quot;&gt;자바 런타임은 어떻게 native memory를 사용할까.&lt;/h3&gt;
+
+&lt;p&gt;자바 런타임은 이전 섹션에서 강조한 하드웨어와 OS 제약조건을 따르는 OS 프로세스입니다.
+자바 런타임 환경은 모든 상황에서 런타임 환경이 어떤 리소스를 필요로 할 것인지 예측할 수 없게 하는 사용자의 코드를 구동하는 기능을 제공합니다. Java 어플리케이션이 관리되는 Java 환경에서 수행하는 모든 액션은 해당 환경을 제공하는 런타임의 리소스 요구에 잠재적으로 영향을 줄 수 있습니다. 이 섹션에서는 어떻게 Java 어플리케이션이 native memory를 사용하는지 그리고 어떻게 native memory를 사용하는지에 대해서 설명하겠습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;h3 id=&quot;java-heap과-garbage-collection&quot;&gt;Java heap과 garbage collection&lt;/h3&gt;
+
+&lt;p&gt;Java 힙은 객체가 할당되는 메모리 영역입니다. 비록 몇몇의 Real Time Specification for Java(RTSJ)를 구현한 것과 같은 전문 Java runtime은 여러개의 heap을 가지고있지만 대부분은 하나의 logical heap을 가집니다. single physical heap은 heap memory를 관리하는 garbage collection (GC) 알고리즘의 필요에 따라 logical 섹션으로 나누어 질 수 있습니다. 이 섹션은 Java memory manager(garbage collector를 포함하는)의 통제하에 있는 native 메모리의 인접한 slabs로 구현됩니다.&lt;/p&gt;
+
+&lt;p&gt;-Xmx와 -Xms옵션을 사용는 Java 커맨드 라인으로 부터 heap의 크기는 조절됩니다. (mx는 힙의 최대 크기, ms는 초기의 크기를 뜻합니다.) 비록 logical 힙이 객체의 수와 GC를 수행하는 데 걸리는 시간에 따라 늘어나고 줄어들 수 있을 지라도, native 메모리의 크기는 일정하게 유지되며 최대 힙의 크기를 나타내는 -Xmx값에 의해 결정됩니다. 대부분의 GC 알고리즘은 연속적인 메모리 slab으로 할당된 힙에 의존하기 때문에, heap을 확장해야 할 때 native memory를 조금 더 할당하는 것은 불가능합니다. 모든 heap 메모리는 우선적으로 예약(reserved)되어야 합니다.&lt;/p&gt;
+
+&lt;p&gt;native 메모리를 예약하는 것(Reserving)은 그것을 할당하는 것과는 다릅니다. native memory가 예약(reserved)될 때, physical 메모리 또는 다른 스토리지가 지원되지 않습니다. 주소 공간의 일부(chunks)를 예약하는(reserving)것이 physical 리소스를 소모하지 않지만, 메모리가 다른 용도로 사용되는 것을 막습니다. 전혀 사용되지 않는 예약 메모리(reserving memory)로 인한 누수는 할당된 메모리 누수만큼이나 심각합니다.&lt;/p&gt;
+
+&lt;p&gt;몇몇의 garbage collector은 힙의 사용된 영역이 축소됨에 따라 힙의 일부를 decommitting (백업용 백업 스토리지 해제) 하는 방법으로 physical 메모리 사용을 최소화합니다.&lt;/p&gt;
+
+&lt;p&gt;Java 힙을 유지하는 메모리 관리 시스템의 상태를 유지하려면 더 많은 native 메모리가 필요합니다. garbage를 수거할 때 free storage를 추적하고 진행 상황을 기록하기 위해 자료구조(data structures)가 할당되어야 합니다. 이러한 데이터 구조의 정확한 크기와 특성은 구현에 따라 달라지지만, 대부분은 힙의 크기에 비례합니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;just-in-time-jit-컴파일러&quot;&gt;Just-in-time (JIT) 컴파일러&lt;/h3&gt;
+
+&lt;p&gt;JIT 컴파일러는 런타임에 Java 바이트 코드를 최적화된 native 실행 가능(executable) 코드로 컴파일합니다. 이는 Java 런타임의 런타임 속도가 크게 향상되고 Java 어플리케이션이 native 코드와 유사한 속도로 실행되게 합니다.&lt;/p&gt;
+
+&lt;p&gt;바이트 코드 컴파일은 native 메모리 (gcc와 같은 정적 컴파일러가 메모리를 구동시키는 것과 동일한 방식으로)를 사용하지만, 입력(바이트 코드)과 출력(실행 코드)도 JIT에 저장됩니다. JIT로 컴파일 된 메소드를 많이 포함하는 Java 어플리케이션은 적게 포함하는 어플리케이션보다 더 많은 native 메모리를 사용합니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;class와-classloader&quot;&gt;Class와 Classloader&lt;/h3&gt;
+&lt;p&gt;Java 어플리케이션은 객체 구조와 메서드 로직을 정의하는 클래스로 구성됩니다. 그들은 또한 Java 런타임 클래스 라이브러리(java.lang.String과 같은)의 클래스를 사용하고, third-party 라이브러리를 사용할 수 있습니다. 이러한 클래스는 사용되는 동안 메모리에 저장되어야 합니다.&lt;/p&gt;
+
+&lt;p&gt;클래스 저장 방법은 구현에 따라 달라집니다. Sun JDk는 permanent generation(PermGen) 힙 영역을 사용하고 있습니다. IBM은 Java 5부터 각 클래스 로더에 네이티브 메모리의 slabs를 할당하고 클래스 데이터를 거기에 저장합니다. 현대 Java 런타임은 주소 공간에 공유 메모리 영역을 매핑하는 클래스 공유(class sharing)같은 기술을 사용합니다. 이러한 할당 메커니즘이 Java 런타임의 native 공간(footprint)에 미치는 영향을 이해하려면, 해당 구현에 대한 기술 문서를 읽어 보십시오. 그러나, 보편적인 진실은 모든 구현에 영향을 미칩니다.&lt;/p&gt;
+
+&lt;p&gt;기본적으로, 더 많은 클래스를 사용하면 더 많은 메모리를 사용하게 됩니다. (이는 native 메모리 사용량이 늘어났다거나 모든 클래스가 들어갈 수 있도록 PermGen 또는 공유 클래스 캐시와 같은 영역의 크기를 명시적으로 조정해야 함을 의미합니다.) 어플리케이션만 맞춰야 할 것이 아니라 프레임워크, 어플리케이션 서버, third-party와 Java 런타임에도 온디맨드 방식으로 로드되고 공간을 차지하는 클래스가 포함할 수 있도록 맞춰야합니다. Java런타임은 클래스를 언로드하여 공간을 재확보할 수 있지만 엄격한 조건 하에서만 가능합니다. single class를 언로드하는 것은 불가능합니다. 대신에 클래스로더를 그들이 로드한 클래스와 함께 언로드 할 수 있습니다. 다음과 같은 경우에만 클래스 로더를 언로드 할 수 있습니다:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Java heap이 classloader를 나타내는 java.lang.ClassLoader 객체에 대한 참조를 포함하고 있지 않을 경우.&lt;/li&gt;
+  &lt;li&gt;Java heap이 classloader에 의해 로드된 클래스를 나타내는 java.lang.Class 객체에 대한 어떠한 참조도 갖지 않고 있을 경우.&lt;/li&gt;
+  &lt;li&gt;클래스로더에 의해 로드된 클래스의 객체가 Java heap에서 활성(참조된) 상태가 아닌 경우.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;Java 런타임이 bootstrap, extension과 어플리케이션과 같은 모든 Java 어플리케이션에 대해 생성하는 세 가지 기본 클래스 로더가 이러한 기준을 결코 충족시킬 수 없다는 점은 주목할 가치가 있습니다. 그러므로, java.lang.String과 같은 시스템 클래스나 어플리케이션 클래스 로더를 통해로드된 모든 어플리케이션 클래스는 런타임에 해제 될 수 없습니다.&lt;/p&gt;
+
+&lt;p&gt;클래스 로더가 수집에 적합한 경우에도 런타임은 GC cycle의 일부로서 클래스 로더를 수집합니다. 몇몇 구현에서는 오로지 일부 GC cycle에서만 클래스로더를 언로드합니다.&lt;/p&gt;
+
+&lt;p&gt;당신이 실현시키지 않아도, 런타임에 클래스가 생성되는 것이 가능합니다. 많은 JEE 어플리케이션에서는 JSP(JavaServerPage)기술을 사용해 웹 페이지를 생성합니다. JSP는 각.jsp페이지에 대한 클래스를 생성하며, 이 클래스는 그들을 로드한 클래스 로더의 수명(lifetime) 동안 지속됩니다(일반적으로 웹 어플리케이션의 수명).&lt;/p&gt;
+
+&lt;p&gt;class를 생성하는 또 다른 방법은 Java reflection을 이용하는 것 입니다. Java 구현에 따라서 reflection이 작동하는 방식은 다양하지만, Sun과 IBM에서 사용하는 메서드에 대해서 지금 설명하겠습니다.&lt;/p&gt;
+
+&lt;p&gt;java.lang.reflect API를 사용할 때, java 런타임은 reflecting 객체(java.lang.reflect.Field와 같은)의 메서드를 객체 또는 reflect될 클래스로 연결해야 합니다. 이는 설정은 적게 필요하지만 느린 Java Native Interface(JNI) 접근자를 사용하거나 런타임에 reflect할 각 객체 타입에 대한 클래스를 동적으로 생성하면서 수행될 수 있습니다. 후자의 방식은 설정하는 데에는 느리지만 실행시킬 때는 더 빠르고, 특정 클래스가 자주 reflect되는 어플리케이션이라면 이상적인 방식입니다.&lt;/p&gt;
+
+&lt;p&gt;Java 런타임은 클래스가 relfect되는 처음 몇 번 JNI 메서드를 사용하지만, 여러 번 사용 된 후에 접근자는 클래스를 빌딩하고 새로운 클래스 로더를 통해 로드하는 바이트 코드 접근자(bytecode accessor)로 확장(inflate)됩니다. 리플렉션을 많이하면 많은 접근자(accessor) 클래스와 클래스 로더를 생성시킬 수 있습니다. reflecting된 객체에 대한 참조를 보유하는 것은 이 클래스들을 활성상태(alive)로 유지하고 계속해서 공간을 차지하게 만듭니다. 바이트 코드 접근자(accessor)를 만드는 것은 꽤 느리기 때문에 Java 런타임은 나중에 사용할 수 있도록 이러한 접근자를 캐시(cache) 할 수 있습니다. 일부 어플리케이션과 프레임워크는 또한 reflecting 객체도 캐시를 하면서, 그들의 native footprint를 증가시킵니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;h3 id=&quot;jni&quot;&gt;JNI&lt;/h3&gt;
+
+&lt;p&gt;JNI는 native code(C와 C++ 같이 native 컴파일된 언어로 작성된 어플리케이션)가 Java 메소드를 호출할 수 있도록 해주고 반대도 가능하게 해줍니다. Java 런타임은 파일과 네트워크 I/O와 같은 class-library 기능을 구현하기 위해서 JNI 코드에 강하게 의존합니다. JNI 어플리케이션은 Java 런타임의 native footprint를 다음과 같이 세 가지 방식으로 증가시킬 수 있습니다:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;JNI 어플리케이션에 대한 native code는 공유 라이브러리 혹은 프로세스 주소 공간에 로드되는 실행파일로 컴파일 됩니다. 더 큰 native 어플리케이션은 간단히 로드함으로서, 프로세스 주소 공간의 상당한 부분을 차지할 수 있습니다.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;native 코드는 Java runtime과 주소 공간을 공유해야 합니다. native code에 의해 수행되는 native 메모리 할당 혹은 메모리 매핑은 Java 런타임으로 부터 메모리를 가져갑니다.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;특정 JNI 함수는 그들의 일반 오퍼레이션의 일부처럼 native 메모리를 사용할 수 있습니다. GetTypeArrayElements와 GetTypeArrayRegion 함수는 native 코드가 잘 동작하도록 Java heap data를 native 메모리 버퍼로 복사할 수 있습니다. 복사를 하는지 안하는지는 runtime 구현에 따라 다릅니다. (Java 5.0 이상의 IBM Developer Kit는 native 복사를 합니다.) 이런 방식으로 Java 힙 데이터의 많은 양에 접근하면, 그에 따라 native heap의 상당 부분을 사용할 수 있습니다.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;h3 id=&quot;nio&quot;&gt;NIO&lt;/h3&gt;
+
+&lt;p&gt;Java 1.4에 도입된 새로운 I/O (NIO)는 채널과 버퍼를 기반으로 I/O를 수행하는 새로운 방식을 추가하였습니다. Java heap에서 메모리에 의해 백업되는 I/O buffer 뿐만 아니라, NIO는 Java 힙 대신에 native 메모리에 백업되는 direct ByteBuffers (java.nio.ButeBuffer.allocateDirect()메서드에 의해 할당되는)에 대한 지원을 제공했습니다.&lt;/p&gt;
+
+&lt;p&gt;direct ByteBuffer 데이터가 어디에 저장되는지에 대해서 혼란스러울 수 있습니다. 어플리케이션은 I/O 오퍼레이션을 수행하는데 여전히 Java heap의 객체를 사용하지만, 데이터를 담고있는 버퍼는 native 메모리에 저장됩니다. 즉 Java heap 객체는 native heap buffer를 참조만 합니다. non-direct ByteBuffer는 데이터를 Java heap의 byte[]배열에 보유하고 있습니다.
+그림 4는 direct와 non-direct ByteBuffer 객체의 차이점을 보여줍니다.&lt;/p&gt;
+
+&lt;p&gt;그림 4. direct와 non-direct java.nio.ByteBuffers에 대한 메모리 토폴로지&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://www.ibm.com/developerworks/library/j-nativememory-linux/bytebuffers.gif&quot; alt=&quot;memorytopology&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;ByteBuffer 객체는 직접 버퍼를 자동으로 정리하지만 Java 힙 GC의 일부로서도 정리될 수 있습니다. 따라서 그들은 native heap에 대한 압력에 자동으로 반응하지 않습니다. GC는 Java힙이 가득 차서 heap-allocation 요청을 처리할 수 없거나 Java 어플리케이션이 명시적으로 이를 요청하는 경우에만 발생합니다. (이는 성능문제를 일으키기 때문에 추천하지 않습니다)&lt;/p&gt;
+
+&lt;p&gt;걷잡을 수 없는 경우에는 native 힙이 가득 차서 하나 이상의 direct ByteBuffers가 GC 대상이 될 수 있지만(native 힙의 공간을 확보할 수 있음), Java힙이 거의 비어 있지 않아서 GC는 발생하지 않습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;h3 id=&quot;스레드&quot;&gt;스레드&lt;/h3&gt;
+
+&lt;p&gt;어플리케이션의 모든 스레드는 자신의 스택(로컬 변수와 함수를 호출할 때 유지해야하는 상태를 저장하기 위해 사용되는 메모리 영역)을 저장하기 위한 메모리를 필요로 합니다. 모든 자바 스레드는 실행하기 위해서 스택 공간을 필요로 합니다. 구현에 따라서, 자바 스레드는 개별 native와 자바 스택들 가질 수 있습니다. 스택 공간과 외에도, 각 스레드는 thread-local 스토리지와 내부 데이터 구조를 위한 native 메모리를 필요로 합니다.&lt;/p&gt;
+
+&lt;p&gt;스레드 크기는 Java 구현과 아키텍처에 따라 다양합니다. 몇몇 구현체는 Java thread를 위한 스택의 크기를 지정할 수 있게 해줍니다. 256KB와 756KB 사이의 값이 일반적입니다.&lt;/p&gt;
+
+&lt;p&gt;비록 스레드 당 사용되는 메모리의 양이 매우 적어도, 수백개의 스레드가 있는 어플리케이션의 경우 스레드 스택의 총 메모리 사용량은 클 수 있습니다. 실행할 수 있는 프로세서보다 더 많은 스레드로 어플리케이션을 실행하는 것은 대개 비효율적이며, 성능이 저하되고 메모리 사용량이 증가할 수 있습니다.&lt;/p&gt;</content><author><name>Jinjoo</name></author><category term="post" /><summary type="html"></summary></entry><entry><title type="html">[번역] Thanks for the memory, Linux (1. Introduction)</title><link href="http://localhost:4000/post/2018/03/16/Thanks-for-the-memory,-Linux-(Introduction).html" rel="alternate" type="text/html" title="[번역] Thanks for the memory, Linux (1. Introduction)" /><published>2018-03-16T00:00:00+09:00</published><updated>2018-03-16T00:00:00+09:00</updated><id>http://localhost:4000/post/2018/03/16/Thanks-for-the-memory,-Linux-(Introduction)</id><content type="html" xml:base="http://localhost:4000/post/2018/03/16/Thanks-for-the-memory,-Linux-(Introduction).html">&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;본 포스팅은 &lt;a href=&quot;https://www.ibm.com/developerworks/library/j-nativememory-linux/&quot;&gt;Thanks for the memory, Linux&lt;/a&gt; 을 번역하여 작성했습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;h3 id=&quot;windows와-linux에서-jvm이-어떻게-native-memory를-사용하는-방법-이해&quot;&gt;Windows와 Linux에서 JVM이 어떻게 native memory를 사용하는 방법 이해&lt;/h3&gt;
+
+&lt;p&gt;모든 Java 객체가 할당되는 Java 힙은 Java 애플리케이션을 작성할 때 가장 밀접하게 연결되는 메모리 영역입니다. JVM은 우리를 호스트 머신의 특성으로부터 보호하기 위해 설계되었기 때문에, 당신이 메모리를 생각할 때 heap을 떠올리는 것은 자연스러운 것 입니다. 당신은 객체 누수(object leak) 혹은 heap에 담기에는 너무 큰 데이터를 할당하려고 해서 생기는 Java heap OutOfMemoryError를 마주한 적이 있을겁니다. 그리고 아마 이런 시나리오에서 디버깅 하는 데 필요한 몇가지 트릭을 배웠을 겁니다. 그러나 Java 애플리케이션이 더 많은 데이터를 다루고 동시 로드(concurrent load)를 하면서, Java 힙이 가득 차 있지는 않지만 오류가 발생하는 시나리오에서는 당신의 트릭으로는 해결할 수 없는 OutOfMemoryErrors를 경험하게 될 수 있습니다. 이런 일이 발생할 때, 당신은 Java Runtime Environment (JRE)의 내부에서 일어나고 있는 것을 이해해야합니다.&lt;/p&gt;
+
+&lt;p&gt;Java 애플리케이션은 Java 런타임의 가상화된 환경(virtualized environment)에서 실행되지만, 런타임 자체는 native 메모리를 포함하는 native 자원을 사용하는 언어(C와 같은)로 작성된 native 프로그램입니다. native 메모리는 Java 애플리케이션이 사용하는 Java heap 메모리와 구분되는 런타임 프로세스에서 사용 가능한 메모리입니다. Java 힙 과 Java 스레드와 같은 모든 가상화 된 리소스는(virtualized resource) 가상 머신(virtual machine)이 실행될 때 사용되는 데이터와 함께 native 메모리에 저장되어야 합니다. 이는 호스트 머신의 하드웨어와 운영 체제 (OS)가 부과하는(impose) native 메모리 제한이 Java 애플리케이션이 수행되는 데에 영향을 미칠 수 있다는 것을 의미합니다.&lt;/p&gt;
+
+&lt;p&gt;이 기사는 다른 플랫폼에서 동일한 주제를 다루는 두 기사 중 하나입니다. 두 기사에서, 당신은 native 메모리가 무엇인지, Java 런타임이 어떻게 native 메모리를 사용하는지, 어떻게 실행되지 않는지, 어떻게 native OutOfMemoryError를 디버깅 하는지를 배우게 될 것입니다. 이 기사는 Windows 및 Linux를 다루며 특정 런타임 구현에 초점을 맞추지 않습니다. &lt;a href=&quot;https://www.ibm.com/developerworks/java/library/j-nativememory-aix/&quot;&gt;companion 기사&lt;/a&gt; 에서는 AIX에 대해 다루고 IBM Developer Kit for Java에 중점을 둡니다. (IBM 구현에 대한 기사의 정보는 AIX가 아닌 다른 플랫폼에서도 마찬가지입니다. 따라서 당신이 Linux 용 IBM Developer Kit 또는 Windows 용 IBM 32-bit Runtime Environment를 사용한다면, 기사가 유용 할 것입니다.)&lt;/p&gt;</content><author><name>Jinjoo</name></author><category term="post" /><summary type="html"></summary></entry><entry><title type="html">[번역] A Closer Look at Android RunTime (ART) in Android L</title><link href="http://localhost:4000/post/2018/03/12/A-Closer-Look-at-Android-RunTime-(ART)-in-Android-L.html" rel="alternate" type="text/html" title="[번역] A Closer Look at Android RunTime (ART) in Android L" /><published>2018-03-12T00:00:00+09:00</published><updated>2018-03-12T00:00:00+09:00</updated><id>http://localhost:4000/post/2018/03/12/A-Closer-Look-at-Android-RunTime-(ART)-in-Android-L</id><content type="html" xml:base="http://localhost:4000/post/2018/03/12/A-Closer-Look-at-Android-RunTime-(ART)-in-Android-L.html">&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;본 포스팅은 &lt;a href=&quot;https://www.anandtech.com/show/8231/a-closer-look-at-android-runtime-art-in-android-l&quot;&gt;A Closer Look at Android RunTime (ART) in Android L&lt;/a&gt; 을 번역하여 작성했습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://images.anandtech.com/doci/8231/Android-L-ART_678x452.png&quot; alt=&quot;ART&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;최근 I/O 컨퍼런스에서 Google은 마침내 안드로이드에 대한 새로운 런타임 계획을 공식 발표했습니다. Android RunTime, ART는 Android Java 코드가 실행되는 가상 머신인 Dalvik의 후속 버전이며 대체재입니다. 지난 가을부터 KitKat 기기에서 이용 가능한 추적과 미리보기(previews)가 있었지만, Google에서 기술적 세부사항 과 Google이 이를 통해 나아가고 있는 방향에 대한 정보가 많지 않았습니다.&lt;/p&gt;
+
+&lt;p&gt;그들의 특정 하드웨어 아키텍처에 맞게 컴파일된 소프트웨어를 실행하는 iOS, Windows 또는 Tizen과 같은 다른 모바일 플랫폼과 달리, Android 소프트웨어 대부분이 “byte-code”에서 자신의 하드웨어에 해당하는 native 명령어로 변환되는 generic code language를 기반으로합니다.&lt;/p&gt;
+
+&lt;p&gt;초기 Android 버전부터 수년동안, Dalvik은 복잡성이 거의없는 단순한 VM으로 시작했습니다. 그러나 시간이 지나면서 Google은 성능 문제를 해결해야 하고 하드웨어 발전에 뒤쳐지지 않아야 할 필요성을 느꼈습니다. 결국 구글은 안드로이드의 2.2 릴리즈와 함께 Dalvik에 JIT-complier를 추가하고, multi-threading 기능을 추가했으며, 서서히 향상시키고자 노력했습니다.&lt;/p&gt;
+
+&lt;p&gt;그러나, 최근 몇년 동안 생태계가 Dalvik 개발을 능가해서 구글은 미래를 위해 견고한 기반이 되는 현재의 성능과 미래의 8-core 기기, 대용량 스토리지 역량과 대형 작업 메모리까지 확장시킬 수 있는 새로운 것을 만들기 위해 노력했습니다.&lt;/p&gt;
+
+&lt;p&gt;그렇게 ART가 나오게 되었습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;architecture&quot;&gt;Architecture&lt;/h1&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://lh5.googleusercontent.com/MxH8wXEbpzjhfDzbDY52F8jp87ciFPaQxMPQN6xQvzRitaH_hQNarzkK90O3HYfieEPX8g1J2BlxmlSZwbAs5jrqiKeRNfnSmdW1OCKXG6DDmpDm_xA5XRGYDyuVx_50VA&quot; alt=&quot;ART Architecture&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;먼저, ART는 Dalvik의 기존 byte-code 형식 인 “dex”(Dalvik 실행 파일)과 완벽하게 호환되도록 설계되었습니다. 따라서 개발자의 관점에서는, 하나 또는 또다른 런타임에 대한 애플리케이션을 작성해야하는 것과 관련하여 전혀 변화가 없고 호환성에 대해서도 전혀 걱정할 필요가 없습니다.&lt;/p&gt;
+
+&lt;p&gt;ART가 가져오는 큰 패러다임의 전환은 JIT(just-in-Time)컴파일러 대신에 어플리케이션 코드를  미리 (Ahead-of-Time (AOT)) 컴파일한다는 것입니다. 런타임에는 애플리케이션을 실행할 때마다 바이트 코드를 기본 코드로 컴파일해야 하며, 여기서는 한번만 실행하면 되며, 이때 이후의 실행은 기존의 컴파일된 네이티브 코드에서 이루어집니다.&lt;/p&gt;
+
+&lt;p&gt;물론 애플리케이션의 native 변환물(translations) 은 공간을 차지합니다. 이 새로운 방법론은  안드로이드 기기의 초기 단계에서부터 사용 가능한 스토리지 공간이 엄청나게 증가했기 때문에 가능해진 것입니다.&lt;/p&gt;
+
+&lt;p&gt;이러한 변화는 과거에는 불가능했던 많은 최적화를 가능하게 합니다. 코드가 단번에 최적화되고 컴파일되기 때문에 한번에 정말 잘 최적화 할만한 가치가 있습니다. Google은 컴파일러가 현재 JIT 컴파일러는 오로지 local/mothod 덩어리(chunks)만 최적화를 했던 것과는 반대로, 코드 전체를 살펴보고 있기 때문에, 이제 애플리케이션 코드 기반 전체에 대해 더 높은 수준 최적화를 달성할 수 있다고 주장합니다. 코드 내 exception checks와 같은 오버 헤드는 크게 제거되며, 메서드 및 인터페이스 호출 속도가 대폭 빨라집니다. 이를 위한 프로세스는 새로운 “dex2oat” 컴포넌트고, Dalvik의 “dexopt”를 대체합니다. Odex 파일(optimized dex)는 또한 ART에서 사라지고 이는 &lt;a href=&quot;https://en.wikipedia.org/wiki/Executable_and_Linkable_Format&quot;&gt;ELF&lt;/a&gt; 파일에 의해 대체됩니다.&lt;/p&gt;
+
+&lt;p&gt;ART가 ELF 실행 파일을 컴파일하기 때문에, 이제 커널은 코드 페이지의 페이지 처리를 다룰 수 ​​있습니다. - 이는 메모리 관리가 훨씬 나아지고 메모리 사용량도 줄어드는 결과를 가져옵니다. &lt;a href=&quot;https://en.wikipedia.org/wiki/Kernel_same-page_merging&quot;&gt;KSM (Kernel same-page merging)&lt;/a&gt;의 효과가 ART에 어떤 영향을 미치는지 궁금합니다. 확실히 눈여겨 봐야 할 부분입니다.&lt;/p&gt;
+
+&lt;p&gt;배터리 수명에 미치는 영향도 중요합니다. - 앱의 runtime 동안에 해석(interpretation)이나 JIT 작업이 더 이상 필요하지 않기 때문에, CPU cycles과 전력 소비를 직접 절감 할 수 있습니다.&lt;/p&gt;
+
+&lt;p&gt;단점은 이 일회성(one-time) 컴파일이 완료하는 데 더 많은 시간이 걸린다는 것입니다. 기기의 첫 번째 부팅과 애플리케이션의 첫 시작은 Dalvik 시스템과 비교하여 훨씬 향상 될 것입니다. Google은 이러한 측면에서 드라마틱하지는 않아도, Dalvik보다 완성된 운송 런타임(finished shipping runtime)이 Dalvik과 비슷하거나 Dalvik보다 훨씬 더 빠를 것이라고 주장합니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://lh3.googleusercontent.com/V4HzsyjzVoNmCWC-CgSjD63oBIQdtDySbUDyi77YPQz_fZ4zjPKTYms9NMCj1T5yDu-WXTUGwPWy7DVyd1OPqLfFTbZ1-q1MxLEaLxsKeM5_O5aGI2KdsLHi55GYgTxvvQ&quot; alt=&quot;Performance&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;위의 그림과 같이 Dalvik에 비해 큰 성능 향상 효과를 거둘 수 있으며, 이를 통해 VM에서 실행되는 코드의 속도가 약 2배 향상됩니다. 구글은 거의 3배나 증가한 체스와 같은 애플리케이션들이 안드로이드 L의 최종 버전이 릴리즈되면 기대할 수 있는 실제 이득의 대표적인 대상(projection)이라고 주장했다.&lt;/p&gt;</content><author><name>Jinjoo</name></author><category term="post" /><summary type="html"></summary></entry><entry><title type="html">[번역] Fastest Thread-safe Singleton in Java</title><link href="http://localhost:4000/post/2018/03/12/Fastest-Thread-safe-Singleton-in-Java.html" rel="alternate" type="text/html" title="[번역] Fastest Thread-safe Singleton in Java" /><published>2018-03-12T00:00:00+09:00</published><updated>2018-03-12T00:00:00+09:00</updated><id>http://localhost:4000/post/2018/03/12/Fastest-Thread-safe-Singleton-in-Java</id><content type="html" xml:base="http://localhost:4000/post/2018/03/12/Fastest-Thread-safe-Singleton-in-Java.html">&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;본 포스팅은 &lt;a href=&quot;http://literatejava.com/jvm/fastest-threadsafe-singleton-jvm/&quot;&gt;Fastest Thread-safe Singleton in Java&lt;/a&gt;을 번역하여 작성했습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;최근에, 우리는 Java에서 thread-safe “초기화 지연(lazily initializing)” 싱글톤을 구현하는 여러가지 방법을 살펴 보았습니다. 가장 간단한 방법은 ‘synchroinzed’입니다. 그러나 몇은 옳고 몇은 옳지 않은 (double checked locking) 몇 가지 다른 제안이 있었습니다.&lt;/p&gt;
+
+&lt;p&gt;그러나 한가지 접근법은 25배 빠릅니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;지연-싱글톤&quot;&gt;지연 싱글톤&lt;/h1&gt;
+
+&lt;p&gt;우리의 기본적인 요구 사항은 어플리케이션 내의 싱글 톤 (아마도 일부 서비스)을 지연 초기화(lazily initialized)하는 것입니다. 일반적으로 이것은 설정 비용이 많이 들고 가끔 필요한 서비스에 유용 할 수 있습니다.&lt;/p&gt;
+
+&lt;p&gt;우리는 여기서 설정 비용에 관심을 두지 않습니다. 이것은 서비스에만 해당됩니다. 우리가 관심을 갖고있는 것은 일단 그것이 설정되면 싱글 톤에 접근하는 (즉, thread-safe방식으로 얻는) 퍼포먼스 비용입니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;다양한-접근법&quot;&gt;다양한 접근법&lt;/h1&gt;
+
+&lt;p&gt;이 작업은 근본적으로 단순하지만 여러 가지 방법으로 다양합니다.
+나의 첫 번째 접근 방식은 단순함이 좋다는 것입니다 - 언어가 제공하는 기능을 사용하고 메소드를 동기화합니다. 다른 사람들은 다양한 접근법을 제공했지만.. 모두가 반드시 이상적이거나 올바른 것은 아닙니다!&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;‘synchronized’ method&lt;/li&gt;
+  &lt;li&gt;AtomicReference fast-path before a ‘synchronized’ section&lt;/li&gt;
+  &lt;li&gt;AtomicReference with a spinlock&lt;/li&gt;
+  &lt;li&gt;double-checked locking  (Java에서는 reliable 하지 않습니다.)&lt;/li&gt;
+  &lt;li&gt;‘volatile’ field를 이용한 double-checked locking&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;‘synchroinzed’ 메소드를 사용하는 것은 확실히 간단하고 성능이 좋습니다.&lt;/p&gt;
+
+&lt;p&gt;AtomicReference는 ‘synchroinzed’ 보다 기술적으로 더 간단하고 빨라서 잠재적으로 성능상의 이점을 제공 할 수 있습니다. 그러나 스핀 락(Spinlocks)은 피해야합니다.&lt;/p&gt;
+
+&lt;p&gt;대중화된 패턴이였던 Double-checked locking은 자바에서 레퍼런스가 저장될 때 생성자 코드가 잠재적으로 실행되지 않을 수 있기 때문에 안전하지 않습니다. JVM 최적화 및 코드 재배치는 “synchroinzed” 경계를 고려하도록 지정되었지만, double-checked locking은 이를 스킵합니다. 추천하지 않습니다. 그러나 1.5 이후에는 이 문제를 해결하기 위해서 ‘volatile’ 필드를 사용할 수 있습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;내부-클래스inner-class-접근법&quot;&gt;‘내부 클래스(Inner Class)’ 접근법&lt;/h1&gt;
+
+&lt;p&gt;Java에서는 클래스 초기화가 ‘필요에 따른(on-demand)’으로, 클래스가 처음 사용될 때 수행됩니다. 보통, 이런 기본적인 행동은 별로 관심이 없습니다.. 하지만 우리가 그것을 사용할 수 있을까요?&lt;/p&gt;
+
+&lt;p&gt;여기서는 ‘holder’를 내부 클래스로 생성하여 singleton을 정적으로 초기화하는 방법을 사용합니다.
+이 패턴은 “필요에 따른 초기화(initialization-on-demand holder)” 라고 알려져 있습니다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Example&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;StaticHolder&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;final&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;MySingleton&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;INSTANCE&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;MySingleton&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;MySingleton&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;getSingleton&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;StaticHolder&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;no&quot;&gt;INSTANCE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;getSingleton()을 호출하면 inner class를 참조해서, JVM이 로드 및 초기화를 합니다. Classloading에는 잠금(lock)이 사용되기 때문에 thread-safe합니다.&lt;/p&gt;
+
+&lt;p&gt;이후에 호출을 하면 JVM은 이미 로드된 내부 클래스를 resolve하고 기존의 싱글톤을 반환합니다. - 캐시.  JVM 최적화의 마법 덕분에 매우 효율적입니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;성능&quot;&gt;성능&lt;/h1&gt;
+
+&lt;p&gt;Java에서의 성능 벤치마킹은 까다로운 분야로 - 웜업(warmup)과 안정적인 조건을 필요로 하며, JIT가 벤치 마크 전체를 최적화하지 않도록 주의해야 합니다.
+이 벤치 마크의 경우 2만개의 웜업(wramup)루프를 사용해서 1,000만개의 루프를 측정했습니다. 테스트 코드가 최적화되는 것을 막기 위해, 반환된 싱글톤을 사용했습니다(그들의 hash-code를 합하여). 또한 루프 및 해시 코드 오버 헤드를 보여 주고 Java가 이 형식을 최적화하는 데 얼마나 효율적인지 정확하게 보여 주는 작업당 비용을 포함하여 업데이트했습니다.&lt;/p&gt;
+
+&lt;p&gt;수치는 다음과 같습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;strong&gt;Technical Approach&lt;/strong&gt;&lt;/td&gt;
+      &lt;td&gt;  &lt;strong&gt;Total Time&lt;/strong&gt;&lt;/td&gt;
+      &lt;td&gt;  &lt;strong&gt;Minus Overhead&lt;/strong&gt;&lt;/td&gt;
+      &lt;td&gt;  &lt;strong&gt;Per Operation&lt;/strong&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;‘synchronized’ method&lt;/td&gt;
+      &lt;td&gt;   858 ms&lt;/td&gt;
+      &lt;td&gt;  834 ms&lt;/td&gt;
+      &lt;td&gt;  83.4 ns&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;double-checked locking, ‘volatile’ field&lt;/td&gt;
+      &lt;td&gt;   39.27 ms&lt;/td&gt;
+      &lt;td&gt;  15.79 ms&lt;/td&gt;
+      &lt;td&gt;  1.58 ns&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;&lt;strong&gt;inner-class static init&lt;/strong&gt;&lt;/span&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;   &lt;strong&gt;33.4 ms&lt;/strong&gt;&lt;/span&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;  &lt;strong&gt;9.92 ms&lt;/strong&gt;&lt;/span&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;  &lt;strong&gt;0.99 ns&lt;/strong&gt;&lt;/span&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;loop &amp;amp; hashcode overhead&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+      &lt;td&gt;  23.48 ms&lt;/td&gt;
+      &lt;td&gt;  2.35 ns&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;25배나 더 빠릅니다!&lt;/p&gt;
+
+&lt;p&gt;JVM 덕분에 내부 클래스 참조, 클래스 로딩 및 스레드 안전성(thread-safety)이 모두 JIT로 갈 것입니다. CPU가 실행될 남아있는 것은 기본적으로 정적 필드에서 읽은 오는 메모리 뿐입니다.&lt;/p&gt;
+
+&lt;p&gt;2.4GHz CPU 테스트에서, ‘synchronized’메서드는 - 스레드 경쟁(thread contention) 없이 - 206 사이클이 필요했습니다. 비교하자면, 루프 반복(loop iteration) 및 ‘내부 클래스(inner class)’ 싱글톤은 단 8 CPU 사이클에 접근할 수 있었습니다.&lt;/p&gt;
+
+&lt;p&gt;이 패턴은 singleton 특정(singleton-specific)이고, map기반 캐시에는 도움이 되지 않습니다. 하지만 싱글톤 서비스의 경우에는 - 빠름일까요, 아니면 뭘까요! JVM개발자들과 이 기술을 내놓은 이들에게 칭찬을 보냅니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;이 접근법에 대해 어떻게 생각하세요? 지금 코멘트 달아주세요.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;참고자료:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;http://jeremymanson.blogspot.kr/2008/05/double-checked-locking.html&quot;&gt;Java Concurrency blog:  Double-checked locking&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://en.wikipedia.org/wiki/Initialization-on-demand_holder_idiom&quot;&gt;Wikipedia: Initialization-on-demand holder idiom&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</content><author><name>Jinjoo</name></author><category term="post" /><summary type="html"></summary></entry><entry><title type="html">[번역] Java Volatile Keyword</title><link href="http://localhost:4000/post/2018/03/11/Java-Volatile-Keyword.html" rel="alternate" type="text/html" title="[번역] Java Volatile Keyword" /><published>2018-03-11T00:00:00+09:00</published><updated>2018-03-11T00:00:00+09:00</updated><id>http://localhost:4000/post/2018/03/11/Java-Volatile-Keyword</id><content type="html" xml:base="http://localhost:4000/post/2018/03/11/Java-Volatile-Keyword.html">&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;본 포스팅은 &lt;a href=&quot;http://tutorials.jenkov.com/java-concurrency/volatile.html&quot;&gt;Java Volatile Keyword&lt;/a&gt;을 번역하여 작성했습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;Java volatile 키워드는 “메인 메모리에 저장되는” Java 변수로 표시하고자할 때 사용됩니다. 즉, volatile 변수의 모든 읽기는 CPU cache가 아닌, 컴퓨터의 메인 메모리로부터 읽어오는 것이며, volatile 변수의 모든 쓰기는 CPU cache가 아닌, 메인 메모리에 기록된다는 것을 의미합니다.&lt;/p&gt;
+
+&lt;p&gt;실제로, Java 5 volatile 키워드는 단지 메인 메모리에 쓰여지고 메인 메모리로부터 읽게 되는 것 이상의 의미를 가지는데 다음 섹션에서 설명하겠습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;변수-가시성-문제&quot;&gt;변수 가시성 문제&lt;/h1&gt;
+&lt;p&gt;Java volatile 키워드는 스레드를 넘어서 변수의 변화에 대한 가시성을 보장해줍니다. 조금 추상적으로 들릴지도 모릅니다. 조금 더 자세하게 설명하겠습니다.&lt;/p&gt;
+
+&lt;p&gt;non-volatile 변수들이 작동하는 멀티스레드 어플리케이션에서 각 스레드들은 그들이 작업하는 동안 성능상의 이유로 메인메모리에서 CPU cache로 변수를 복사할 수 있습니다. 만약 당신의 컴퓨터가 하나 이상의 CPU를 갖고 있다면, 각 스레드는 다른 CPU에서 실행될 수 있습니다. 이는 각 스레드가 변수를 서로 다른 CPU의 CPU cache로 복사할 수 있음을 의미합니다. 여기에는 다음과 같은 내용이 설명되어 있습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;http://tutorials.jenkov.com/images/java-concurrency/java-volatile-1.png&quot; alt=&quot;JMM&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;non-volatile변수를 사용하면 JVM이 메인 메모리에서 CPU캐시로 데이터를 읽거나 CPU캐시에서 메인 메모리로 데이터를 쓰는 시점을 보장할 수 없습니다. 이는 다음 섹션에서 설명할 몇가지 문제를 야기할 수 있습니다.&lt;/p&gt;
+
+&lt;p&gt;둘 이상의 스레드가 다음과 같이 선언된 카운터 변수를 포함하는 공유 객체에 접근하는 상황을 떠올려보십시오.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;SharedObject&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;counter&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;스레드 1이 카운터 변수를 증가시키지만, 스레드 1과 스레드 2가 카운터 변수를 수시로 읽을 수 있다는 것을 상상해 보십시오. 카운터 변수가 volatile으로 선언되지 않으면 카운터 변수 값이 CPU cache에서 메인 메모리로 다시 기록되는 시점에 대한 보증은 없습니다. 즉, CPU cache의 카운터 변수 값이 메인 메모리의 카운터 변수 값과 동일하지 않을 수 있다는 뜻입니다. 이 상황은 다음과 같습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;http://tutorials.jenkov.com/images/java-concurrency/java-volatile-2.png&quot; alt=&quot;JMM&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;다른 스레드가 아직 메인 메모리에 다시 기록하지 않았기 때문에 변수의 최신 값을 보지 못하는 스레드의 문제를 “가시성” 문제라고 합니다. 한 스레드의 업데이트는 다른 스레드에 보이지 않습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;java-volatile-가시성-보장&quot;&gt;Java Volatile 가시성 보장&lt;/h1&gt;
+&lt;p&gt;Java volatile 키워드는 변수 가시성 문제를 해결하기 위한 것입니다. 카운터 변수를 volatile로 선언하면 카운터 변수에 대한 모든 쓰기가 메인 메모리에 즉시 기록됩니다. 또한 카운터 변수의 모든 읽기는 메인 메모리에서 직접 읽게됩니다.
+카운터 변수의 volatile 선언 형식은 다음과 같습니다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;SharedObject&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;volatile&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;counter&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;따라서 volatile 변수를 선언하는 것은 해당 변수에 대한 다른 쓰기 스레드에 대한 가시성이 보장됩니다. 위에 주어진 시나리오에서 한 스레드(T1)가 카운터를 수정하고 다른 스레드(T2)가 카운터를 읽는 경우(절대 수정하지는 않는다), 카운터 변수를 volatile로 선언하는 것은 T2가 쓰기에 대한 가시성을 보장받기 위해 충분합니다.
+그러나 T1과 T2가 카운터 변수를 증가 시키면 카운터 변수를 volatile로 선언하는 것이 충분하지 않습니다. 나중에 더 설명하겠습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;volatile-모든-가시성-보장&quot;&gt;volatile 모든 가시성 보장&lt;/h1&gt;
+
+&lt;p&gt;실제로 Java volatile의 가시성 보장은 volatile 변수 그 자체를 뛰어 넘습니다. 가시성 보장은 다음과 같습니다.&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;스레드 A가 volatile 변수에 쓰고 이후에 스레드 B가 동일한 volatile 변수를 읽으면 volatile 변수를 쓰기 전에 스레드 A에서 볼 수 있는 모든 변수가 volatile 변수를 읽은 후에 스레드 B에서도 볼 수 있습니다.&lt;/li&gt;
+  &lt;li&gt;스레드 A가 volatile 변수를 읽으면, volatile 변수를 읽을 때 스레드 A가 볼 수 있는 모든 변수들 또한 메인 메모리에서 다시 읽어오게됩니다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;코드와 함께 설명하겠습니다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;MyClass&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;volatile&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;update&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;years&lt;/span&gt;  &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;months&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;days&lt;/span&gt;   &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;udpate()메서드는 3개의 변수를 씁니다. 이 중 days만 volatile입니다.
+volatile 모든 가시성 보장은 days에 값을 쓸 때, 스레드가 볼 수 있는 모든 변수도 메인 메모리에 기록됨을 의미합니다. 즉 days에 값을 쓸 때, years와 months도 메인 메모리에 기록됨을 의미합니다.
+years, month와 days를 읽을 때는 다음과 같을 수 있습니다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;MyClass&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;volatile&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;totalDays&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;total&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;total&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;30&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;total&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;365&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;total&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;update&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;years&lt;/span&gt;  &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;months&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;days&lt;/span&gt;   &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;totalDays()메서드는 days의 값을 total 변수로 읽어들이며 시작됩니다. days변수를 읽을 때, months와 years의 값 또한 메인 메모리에서 읽어옵니다. 그러므로 위의 읽기 연산 순서대로 days, months와 years의 최신 값을 볼 수 있음을 보장받습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;명령어-재배치-문제&quot;&gt;명령어 재배치 문제&lt;/h1&gt;
+&lt;p&gt;명령어의 의미론적(semantic) 의미가 동일하게 유지되는 한, Java VM과 CPU는 성능 상의 이유로 프로그램에서 명령어의 순서를 바꿀 수 있습니다. 다음의 명령어들을 보십시오.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;a&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;이 명령어들은 프로그램의 의미론적(semantic) 의미를 잃지 않으며 다음과 같이 순서가 바뀔 수 있습니다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;a&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;a&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;b&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;b&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;++&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;그러나 명령어 재배치는 변수들 중 하나가 volatile 변수일 때 문제가 생깁니다. Java volatile 튜토리얼의 앞부분에 있는 예제 MyClass를 살펴 봅시다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;MyClass&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;volatile&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;update&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;years&lt;/span&gt;  &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;months&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;days&lt;/span&gt;   &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;update()메서드가 days에 값을 쓰면, years와 months에 새롭게 쓰여진 값들 또한 메인 메모리에 기록됩니다. 하지만, Java VM이 이와 같이 명령어 순서를 바꾼다면 어떻게 될까요?&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;update&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;){&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;days&lt;/span&gt;   &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;days&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;months&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;months&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;nf&quot;&gt;years&lt;/span&gt;  &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;years&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;days 변수가 수정될 때 months와 years도 여전히 메인 메모리로 기록됩니다. 하지만 이번에는 새 값이 months와 years에 쓰여지기 전에 발생합니다. 따라서 새로운 값들은 다른 스레드에 제대로 보이지 않습니다. 명령어 재배치의 의미론적(semantic) 의미가 변경되었습니다.&lt;/p&gt;
+
+&lt;p&gt;Java는 다음 섹션에서 보게될 것처럼 이 문제에 대한 해결책을 가지고있습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;java-volatile-happens-before-보장&quot;&gt;Java volatile Happens-Before 보장&lt;/h1&gt;
+
+&lt;p&gt;명령어 재배치 문제를 해결하기 위해서, Java volatile 키워드는 가시성 보증 외에도, “happens-before”를 보장해줍니다. happens-before는 다음을 보장해줍니다.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;volatile 변수에 &lt;strong&gt;쓰기 전&lt;/strong&gt; 에 원래 읽기 / 쓰기가 발생한 경우, 다른 변수에 대한 읽기 및 다른 변수에 대한 쓰기는 volatile 변수에 대한 쓰기 이후로 재배치 될 수 없습니다.
+volatile 변수에 쓰기 전의 읽기 / 쓰기는 volatile 변수에 대한 쓰기 “이전(happen before)”에 발생하도록 보장됩니다.
+예를 들어 다음과 같은 경우에도 여전히 가능하다는 점에 유의하십시오. volatile 쓰기 이후에 위치하는 다른 변수의 읽기 / 쓰기는 volatile 쓰기 전으로 재배치 될 수 있습니다. 반대는 아닙니다. 이후에서 이전으로는 허용되지만 이전에서 이후로는 허용되지 않습니다.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;volatile 변수에 &lt;strong&gt;읽기 후&lt;/strong&gt; 에 원래 읽기 / 쓰기가 발생한 경우, 다른 변수에 대한 읽기 및 다른 변수에 대한 쓰기는 volatile 변수에 대한 읽기 이전으로 재배치 될 수 없습니다.  예를 들어 다음과 같은 경우에도 여전히 가능하다는 점에 유의하십시오. volatile 읽기 전에 위치하는 다른 변수의 읽기 / 쓰기는 volatile 쓰기 후로 재배치 될 수 있습니다. 반대는 아닙니다. 이전에서 이후로는 허용되지만 이후에서 이전으로는 허용되지 않습니다.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;위의 happens-before 보장은 volatile 키워드의 가시성 보장이 시행되고 있음을 보장합니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;volatile이-항상-충분한-것은-아니다&quot;&gt;volatile이 항상 충분한 것은 아니다&lt;/h1&gt;
+
+&lt;p&gt;volatile 키워드가 volatile 변수의 모든 읽기를 메인 메모리에서 직접 읽을 수 있고 volatile 변수에 대한 모든 쓰기가 메인 메모리에 직접 기록될 수 있게 보장하더라도, volatile 변수를 선언하는 것만으로는 충분치 않은 상황이 여전히 존재합니다.&lt;/p&gt;
+
+&lt;p&gt;앞서 설명한 상황에서는 스레드 1만 공유 카운터 변수에 쓰기 연산을 하고, 카운터 변수 volatile을 선언하는 것으로 스레드 2에서 항상 최신 값을 확인하는 데에 충분했습니다.&lt;/p&gt;
+
+&lt;p&gt;사실, 변수에 쓰여진 새로운 값이 이전 값에 의존하지 않는다면, 여러개의 스레드들은 공유 volatile 변수에 쓸 수 있고 메인 메모리에는 여전히 올바른 값이 저장되어 있습니다. 즉, 공유 volatile 변수에 값을 쓰는 스레드가 다음 값을 계산하기 위해 값을 읽지 않아도됩니다.&lt;/p&gt;
+
+&lt;p&gt;스레드가 먼저 volatile 변수의 값을 읽어야 하고 이 값을 기반으로 하여 공유 volatile 변수에 대한 새 값을 생성하는 즉시, volatile 변수는 더 이상 가시성을 보장하지 않습니다.  volatile 변수의 읽기 연산과 새로운 값의 쓰기연산 사이의 짧은 시간 차가 여러개의 스레드가 volatile변수의 동일한 값을 읽고 변수에 대한 새로운 값을 생성하고 메인 메인 메모리에 기록할 때 다른 스레드의 값을 덮어쓰는 &lt;strong&gt;경합조건(race condition)&lt;/strong&gt; 을 만듭니다.&lt;/p&gt;
+
+&lt;p&gt;여러개의 스레드가 동일한 카운터를 증가시키는 상황은 확실히 volatile 변수로는 충분하지 않은 상황입니다. 다음 섹션에서는 이 사례를 자세히 설명합니다.&lt;/p&gt;
+
+&lt;p&gt;스레드 1이 값이 0인 공유 카운터 변수를 CPU cache로 읽어 들이고, 이를 1로 늘리고 변경된 값을 메인 메모리에 다시 기록하지 않는 경우를 상상해 보십시오. 그러면 스레드 2는 메인 메모리에서 변수 값이 여전히 0인 동일한 카운터 변수를 자신의 CPU cache로 읽어 들일 수 있습니다. 그런 다음, 스레드 2는 카운터를 1까지 늘릴 수 있으며, 또한 다시 메인 메모리에 기록하지 못 할 수 있습니다. 이러한 상황은 아래 다이어그램에 설명되어 있습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;http://tutorials.jenkov.com/images/java-concurrency/java-volatile-3.png&quot; alt=&quot;JMM&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;스레드 1과 스레드 2가 사실상 동기화되지 않은 상태입니다. 공유 카운터 변수의 실제 값은 2여야 하지만 각 스레드에는 해당 CPU cache의 변수의 값은 1이고 메인 메모리에서는 값이 여전히 0입니다. 엉망 진창입니다! 스레드가 공유 카운터 변수의 값을 메인 메모리에 다시 기록하는 경우에도, 값이 잘못될 수 있습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;언제-volatile이-충분할까요&quot;&gt;언제 volatile이 충분할까요?&lt;/h1&gt;
+
+&lt;p&gt;앞서 언급했듯이 두개의 스레드가 공유 변수에 대한 읽기 및 쓰기를 모두 수행하는 경우 이에 대한 volatile 키워드를 사용하는 것으로는 충분하지 않습니다. 이 경우에는 &lt;strong&gt;synchronized&lt;/strong&gt; 를 사용하여 변수를 읽고 쓰는 작업이 원자(atomic)로 이루어지도록 해야 합니다. volatile 변수를 읽거나 쓸 때는 스레드 읽기 또는 쓰기가 차단(block)되지 않습니다. 이 경우에는 임계구역에서 &lt;strong&gt;synchroinzed&lt;/strong&gt; 키워드를 사용해야 합니다.&lt;/p&gt;
+
+&lt;p&gt;synchroinzed 블록 대신 Java.util.concurrent패키지에 있는 많은 원자(atomic) 데이터 유형 중 하나를 사용할 수도 있습니다. 예를 들어 AtomicLong또는 AtomicReference또는 다른 항목 중 하나가 있습니다.&lt;/p&gt;
+
+&lt;p&gt;오직 한 스레드만 volatile variable을 읽고 쓰고 다른 스레드들은 오로지 변수를 읽기만 한다면, 읽기 스레드는 volatile에 쓰여진 최신 값을 볼 수 있음을 보장받습니다. volatile 변수를 만들지 않고는 보장받을 수 없습니다.&lt;/p&gt;
+
+&lt;p&gt;volatile 키워드는 32bit 와 64bit에서 동작합니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;volatile에-대한-성능-고려사항&quot;&gt;volatile에 대한 성능 고려사항&lt;/h1&gt;
+
+&lt;p&gt;volatile 변수에 대한 읽기와 쓰기는 메인 메모리 부터 값를 읽거나 메인 메모리에 값을 쓰게 됩니다. 메인 메모리에서 읽고 쓰는 것이 CPU cache에 접근 하는 것보다 더 비쌉니다. volatile 변수에 접근하면 정상적인 성능 향상 기술인 명령어 재배치를 할 수 없습니다. 따라서 변수의 가시성의 보장이 필요할 때만 volatile 변수를 사용해야 합니다.&lt;/p&gt;</content><author><name>Jinjoo</name></author><category term="post" /><summary type="html"></summary></entry><entry><title type="html">[번역] JAVA MEMORY MODEL AND REORDERING</title><link href="http://localhost:4000/post/2018/03/09/JAVA-MEMORY-MODEL-AND-REORDERING.html" rel="alternate" type="text/html" title="[번역] JAVA MEMORY MODEL AND REORDERING" /><published>2018-03-09T00:00:00+09:00</published><updated>2018-03-09T00:00:00+09:00</updated><id>http://localhost:4000/post/2018/03/09/JAVA-MEMORY-MODEL-AND-REORDERING</id><content type="html" xml:base="http://localhost:4000/post/2018/03/09/JAVA-MEMORY-MODEL-AND-REORDERING.html">&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;본 포스팅은 &lt;a href=&quot;https://assylias.wordpress.com/2013/02/01/java-memory-model-and-reordering/&quot;&gt;JAVA MEMORY MODEL AND REORDERING&lt;/a&gt;을 번역하여 작성했습니다.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h1 id=&quot;java-memory-model-and-reordering&quot;&gt;JAVA MEMORY MODEL AND REORDERING&lt;/h1&gt;
+
+&lt;p&gt;이 포스트는 double checked locking idiom을 해결하는 방법에 대한 또 다른 포스트가 아닙니다. 여기서 목표는 동기화 없이 무엇이 잘못될 수 있는지를 이해하는 것입니다.&lt;/p&gt;
+
+&lt;p&gt;Java Momory Model(JMM)의 &lt;a href=&quot;https://docs.oracle.com/javase/specs/jls/se7/html/jls-17.html#jls-17.4.5-410&quot;&gt;가장 중요한 약속들&lt;/a&gt; 중 하나는 다음과 같습니다.
+&lt;br /&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;프로그램이 올바르게 동기화된다면, 프로그램의 모든 실행이 순차적으로 일관되게 나타날 것입니다. 이것은 프로그래머에게 강력한 보증입니다. 프로그래머는 코드에 데이터 경합이 포함되어 있는지 판단하기 위해 순서를 변경하는 것에 대해 생각할 필요가 없습니다.
+따라서 그들은 그들의 코드가 정확히 동기화되었는지를 판단할 때 순서를 변경하는 것에 대해 고려할 필요가 없습니다. 한번 이 코드가 올바르게 동기화된다는 결정을 내리면,
+프로그래머는 순서 변경이 그녀 혹은 그의 코드에 영향을 미칠 것인지 걱정할 필요가 없습니다.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;Java Concurrency in Practice에서 가져온 다음 코드는 공유 변수 resource에 대한 접근이 완벽하게 동기화되지 않아 Thread safe 하지 않습니다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;UnsafeLazyInitialization&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Resource&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;resource&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Resource&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;getInstance&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;resource&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;null&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;sr&quot;&gt;/1
+            resource = new Resource();  /&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;resource&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;sr&quot;&gt;//&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;멀티 스레드 환경에서 innocent한 부분이 실행되었을 때 발생할 수 있는 문제들에 대해서 설명하겠습니다.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;resource는 한 번 이상 초기화 될 수 있습니다.&lt;/li&gt;
+  &lt;li&gt;getInstance는 일관되지 않은 상태로 객체를 리턴할 수 있습니다.&lt;/li&gt;
+  &lt;li&gt;더 흥미롭게도, getInstance는 null를 리턴할 수 있습니다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;다중-인스턴스화&quot;&gt;다중 인스턴스화&lt;/h2&gt;
+&lt;p&gt;이것은 가장 분명한 이슈입니다 - Check-then-Act 패턴을 사용하는 코드는 두 스레드가 메서드에 동시에 도착하여 resource가 null임을 확인하고 변수를 초기화를 할 가능성이 있습니다. 어떻게 싱글톤이 두 개의 인스턴스를 가질 수 있을까요.&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;부적절하게-생산된-객체&quot;&gt;부적절하게 생산된 객체&lt;/h2&gt;
+&lt;p&gt;이는 덜 분명한 사실입니다. (2)는 atomic으로 보이지만 JVM의 요구 사항과 다릅니다.&lt;/p&gt;
+&lt;ol&gt;
+  &lt;li&gt;메모리를 할당합니다.&lt;/li&gt;
+  &lt;li&gt;새로운 객체를 생성합니다.&lt;/li&gt;
+  &lt;li&gt;객체의 필드를 default값으로 설정하여 초기화를 합니다. (boolean은 false, 다른 primitive type은 0, 객체는 null)&lt;/li&gt;
+  &lt;li&gt;부모 생성자를 호출하는 것도 포함한 생산자를 run시킵니다.&lt;/li&gt;
+  &lt;li&gt;resource에 새롭게 생성된 객체의 레퍼런스를 대입합니다.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;동기화가 없기 때문에, JMM은 사실상 JVM이 이 과정을 아무 순서대로 수행하는 것을 허용합니다.
+&lt;a href=&quot;http://www.cs.umd.edu/~pugh/java/memoryModel/DoubleCheckedLocking.html&quot;&gt;double checked locking에 대한 유명한 토론 의 예제&lt;/a&gt;를 참조하세요. 이는 JIT 컴파일러가 4단계 이전에 5단계를 실행하는 것을 보여줍니다. 그래서 getInstance는 null이 아니지만 일관되지 않은 객체의 레퍼런스도 리턴할 수 있습니다 (초기화되지 않은 필드와 함께).&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;getinstance는-null을-리턴할-수-있다&quot;&gt;getInstance는 null을 리턴할 수 있다&lt;/h2&gt;
+
+&lt;p&gt;이는 훨씬 덜 분명합니다. 이러한 간단한 코드에서 null을 리턴할 수 있는 실행 경로를 상상하는 것은 어렵습니다. 그러나 JMM은 이를 허용합니다. 왜 이것이 가능한지 이해하려면 우리는 읽기와 쓰기를 자세하게 분석하고 그들 사이에 전후 관계가 있는지 평가할 필요가 있습니다. 읽기와 쓰기를 명확하게 보여주기 위해 다음과 같이 다시 작성할 수 있습니다:&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;strong&gt;Thread 0&lt;/strong&gt;&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;10&lt;/span&gt; : resource = null;     //default value&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+      &lt;td&gt;//write&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;strong&gt;Thread 1&lt;/strong&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;strong&gt;Thread 2&lt;/strong&gt;&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;11: a = resource;&lt;/td&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;21&lt;/span&gt;: x = resource;&lt;/td&gt;
+      &lt;td&gt;//read&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;12: if (a == null)&lt;/td&gt;
+      &lt;td&gt;22: if (x == null)&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;13&lt;/span&gt;:    resource = new Resource();&lt;/td&gt;
+      &lt;td&gt;23:    resource = new Resource();&lt;/td&gt;
+      &lt;td&gt;//write&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;14: b = resource;&lt;/td&gt;
+      &lt;td&gt;&lt;span style=&quot;color:#f60;&quot;&gt;24&lt;/span&gt;: y = resource;&lt;/td&gt;
+      &lt;td&gt;//read&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;15: return b;&lt;/td&gt;
+      &lt;td&gt;25: return y;&lt;/td&gt;
+      &lt;td&gt; &lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://docs.oracle.com/javase/specs/jls/se7/html/jls-17.html#jls-17.4.5-500&quot;&gt;JLS #17.4.5&lt;/a&gt;는 읽기가 쓰기를 관찰할 수 있음을 허용하는 규칙을 제시했습니다:&lt;/p&gt;
+&lt;blockquote&gt;
+  &lt;p&gt;변수 v 의 읽기 r 이 execution trace의 전후 관계의 부분 순서에 있는 경우, v 에 대한 쓰기 w 를 관찰할 수 있다고 말한다.&lt;/p&gt;
+  &lt;ul&gt;
+    &lt;li&gt;r 은 w 이전에 배치되지 않고 ( hb(r, x)의 경우가 아니다. ),&lt;/li&gt;
+    &lt;li&gt;쓰기 w’ 는 v 에 개입하지 않습니다. ( hb(w, w’)와 hb(w’, r)같은 v 에 대한 쓰기 w’ 는 없다. )&lt;/li&gt;
+  &lt;/ul&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;p&gt;그러므로 이 예제에서, &lt;span style=&quot;color:#f60;&quot;&gt;21&lt;/span&gt;과 &lt;span style=&quot;color:#f60;&quot;&gt;24&lt;/span&gt;는 &lt;span style=&quot;color:#f60;&quot;&gt;10&lt;/span&gt; 또는 &lt;span style=&quot;color:#f60;&quot;&gt;13&lt;/span&gt;을 관찰하는 것이 허용되며 프로그램의 올바른 실행은 다음과 같습니다.
+(스레드 1이 resource가 null인 것을 확인하고 초기화할 것임을 가정합니다.)&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;21: x = not null (reads the write line 13)&lt;/li&gt;
+  &lt;li&gt;22: false&lt;/li&gt;
+  &lt;li&gt;24: y = null (reads the write line 10)&lt;/li&gt;
+  &lt;li&gt;25: return null&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;명령어-재배치&quot;&gt;명령어 재배치&lt;/h2&gt;
+&lt;p&gt;예제에서, T2는 null이 아닌 값을 확인한 이후 null 값을 확인할 수 없지만, 컴파일러 또는 JVM 또는 JIT는 유사한 실행을 생성하는 방식으로 명령어들을 재배치할 수 있습니다. 예를 들어, 가능한 재배치(이론적인 실행과 같이)는 다음과 같습니다.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-ruby&quot; data-lang=&quot;ruby&quot;&gt;&lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;UnsafeLazyInitialization&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;private&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Resource&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;resource&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kp&quot;&gt;public&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;Resource&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;getInstance&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;no&quot;&gt;Resource&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;resource&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;sr&quot;&gt;//nu&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ll&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;in&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;T1&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;and&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;T2&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;resource&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;null&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;sr&quot;&gt;/null in T1 but not in T2 because it has been initialised by T1 in the meantime
+            resource = temp = new Resource(); /&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;/&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;only&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;executed&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;by&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;T1&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;temp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;sr&quot;&gt;//&lt;/span&gt;&lt;span class=&quot;no&quot;&gt;T1&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;returns&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;the&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;value&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;no&quot;&gt;T2&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;returns&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;null&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;이 재배치는, 비록 말이 안 되지만, 스레드 내부의 의미에 영향을 주지 않기 때문에 완벽하게 유효합니다. (싱글 스레드 환경에서 실행되었다면, 원래의 코드와 똑같은 결과를 보여줬을 겁니다.)&lt;/p&gt;
+
+&lt;p&gt;&lt;br /&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;결론&quot;&gt;결론&lt;/h2&gt;
+
+&lt;p&gt;이 예제는 상당히 부자연스러운 예에서 부적절하게 동기화된 프로그램의 결과가 상당히 놀랄 수 있음을 보여줍니다. 실제로 어떤 컴파일러가 재배치를 수행할 것 같지는 않지만, 조금 더 복잡한 상황이 되면 분석이 불가능해질 수 있습니다.&lt;/p&gt;</content><author><name>Jinjoo</name></author><category term="post" /><summary type="html"></summary></entry><entry><title type="html">Photo_14</title><link href="http://localhost:4000/film/2018/03/09/Photo_14.html" rel="alternate" type="text/html" title="Photo_14" /><published>2018-03-09T00:00:00+09:00</published><updated>2018-03-09T00:00:00+09:00</updated><id>http://localhost:4000/film/2018/03/09/Photo_14</id><content type="html" xml:base="http://localhost:4000/film/2018/03/09/Photo_14.html"></content><author><name>Jinjoo</name></author><category term="film" /><summary type="html"></summary></entry><entry><title type="html">Photo_13</title><link href="http://localhost:4000/film/2018/03/09/Photo_13.html" rel="alternate" type="text/html" title="Photo_13" /><published>2018-03-09T00:00:00+09:00</published><updated>2018-03-09T00:00:00+09:00</updated><id>http://localhost:4000/film/2018/03/09/Photo_13</id><content type="html" xml:base="http://localhost:4000/film/2018/03/09/Photo_13.html"></content><author><name>Jinjoo</name></author><category term="film" /><summary type="html"></summary></entry><entry><title type="html">Photo_12</title><link href="http://localhost:4000/film/2018/03/09/Photo_12.html" rel="alternate" type="text/html" title="Photo_12" /><published>2018-03-09T00:00:00+09:00</published><updated>2018-03-09T00:00:00+09:00</updated><id>http://localhost:4000/film/2018/03/09/Photo_12</id><content type="html" xml:base="http://localhost:4000/film/2018/03/09/Photo_12.html"></content><author><name>Jinjoo</name></author><category term="film" /><summary type="html"></summary></entry><entry><title type="html">Photo_10</title><link href="http://localhost:4000/film/2018/03/09/Photo_10.html" rel="alternate" type="text/html" title="Photo_10" /><published>2018-03-09T00:00:00+09:00</published><updated>2018-03-09T00:00:00+09:00</updated><id>http://localhost:4000/film/2018/03/09/Photo_10</id><content type="html" xml:base="http://localhost:4000/film/2018/03/09/Photo_10.html"></content><author><name>Jinjoo</name></author><category term="film" /><summary type="html"></summary></entry></feed>

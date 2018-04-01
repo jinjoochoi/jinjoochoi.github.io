@@ -11,6 +11,8 @@ author:
   github_username: jinjoochoi
   url:            "https://jinjoochoi.github.io"
 
+# File Handling
+include: [film]
 
 # Build settings
 markdown:       kramdown
@@ -32,10 +34,10 @@ permalink:      /:year-:month-:day/:title
 # Pagination
 paginate_multiple:
   - paginate: 5
-    paginate_path: "/page:num/"
+    paginate_path: "/blog/page:num/"
     sub_dir: '/post'
   - paginate: 12
-    paginate_path: '/film/page:num/'
+    paginate_path: '/film/blog/page:num/'
     sub_dir: '/film'
 
 # Collections

@@ -41,6 +41,12 @@ paginate_multiple:
 collections:
   film:
     output: true
+  about:
+    output: true
 
 # Analytics
 g-analytics: UA-115470668-1
+
+
+# Permalinks, default is pretty
+permalink: pretty

@@ -4,6 +4,8 @@ title: "[번역] Java Volatile Keyword"
 date:   2018-03-11
 author : Jinjoo
 post : true
+category : post
+paginate_onlykey: category
 ---
 <br/>
 

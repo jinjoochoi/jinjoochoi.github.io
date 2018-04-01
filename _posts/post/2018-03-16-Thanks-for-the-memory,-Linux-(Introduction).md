@@ -4,6 +4,8 @@ title: "[번역] Thanks for the memory, Linux (1. Introduction)"
 date:   2018-03-16
 author : Jinjoo
 post : true
+category : post
+paginate_onlykey: category
 ---
 <br/>
 

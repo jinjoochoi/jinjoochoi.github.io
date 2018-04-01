@@ -4,6 +4,8 @@ title: "[번역] Thanks for the memory, Linux (3. How the Java runtime uses nati
 date:   2018-03-17
 author : Jinjoo
 post : true
+category : post
+paginate_onlykey: category
 ---
 <br/>
 

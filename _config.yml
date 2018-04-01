@@ -27,9 +27,6 @@ plugins:
   - jekyll-paginate
   - jekyll-paginate-multiple
 
-# Permalink
-permalink:      /:year-:month-:day/:title
-
 
 # Pagination
 paginate_multiple:

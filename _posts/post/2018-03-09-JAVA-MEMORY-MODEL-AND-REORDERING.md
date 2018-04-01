@@ -4,6 +4,8 @@ title: "[번역] JAVA MEMORY MODEL AND REORDERING"
 date:   2018-03-09
 author : Jinjoo
 post : true
+category : post
+paginate_onlykey: category
 ---
 <br/>
 

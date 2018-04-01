@@ -4,6 +4,8 @@ title: "[번역] A Closer Look at Android RunTime (ART) in Android L"
 date:   2018-03-12
 author : Jinjoo
 post : true
+category : post
+paginate_onlykey: category
 ---
 <br/>
 

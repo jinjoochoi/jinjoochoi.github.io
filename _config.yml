@@ -34,10 +34,10 @@ permalink:      /:year-:month-:day/:title
 # Pagination
 paginate_multiple:
   - paginate: 5
-    paginate_path: "/blog/page:num/"
+    paginate_path: "/page:num/"
     sub_dir: '/post'
   - paginate: 12
-    paginate_path: '/film/blog/page:num/'
+    paginate_path: '/film/page:num/'
     sub_dir: '/film'
 
 # Collections

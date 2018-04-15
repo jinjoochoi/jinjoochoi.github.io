@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+	<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-115470668-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-115470668-1');
+</script>
+
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>
+    
+      Kotlin singletons with argument &middot; DOGSEAR
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Libre+Baskerville:400,400i,700">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nanum%20Gothic:400,400i,700">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+</head>
+
+
+  <body>
+    <nav class="nav">
+      <div class="nav-container">
+        <a href="">
+          <h2 class="nav-title">DOGSEAR</h2>
+        </a>
+        <ul>
+          <li><a href="/about">About</a></li>
+          <li><a href="/">Post</a></li>
+          <li><a href="/film">Film</a></li>
+        </ul>
+    </div>
+  </nav>
+
+    <main>
+      <div class="post">
+  <div class="post-info">
+    <span>Written by</span>
+    
+        Jinjoo
+    
+
+    
+      <br>
+      <span>on&nbsp;</span><time datetime="2018-04-15 00:00:00 +0900">April 15, 2018</time>
+  </div>
+
+  <h1 class="post-title">Kotlin singletons with argument</h1>
+  <div class="post-line"></div>
+  
+  <p><br /></p>
+
+<p>본 포스팅은 <a href="https://medium.com/@BladeCoder/kotlin-singletons-with-argument-194ef06edd9e">Kotlin singletons with argument</a> 을 번역하여 작성했습니다.</p>
+
+<p><br /></p>
+
+<h3 id="객체는-한계점을-지니고-있습니다">객체는 한계점을 지니고 있습니다.</h3>
+
+<p>코틀린에서, 싱글톤 패턴은 해당 프로그래밍 언어로 존재하지 않는 정적멤버와 필드를 대체하는 데 사용되곤 합니다. 싱글톤은 object를 간단하게 <a href="https://kotlinlang.org/docs/reference/object-declarations.html#object-declarations">선언함으로서</a> 생성됩니다.</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="n">object</span> <span class="no">SomeSingleton</span></code></pre></figure>
+
+<p>class와는 반대로, object는 어떤 생성자도 갖을 수 없지만, 만약 초기화가 필요한 경우 init block이 허용됩니다.</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="n">object</span> <span class="no">SomeSingleton</span> <span class="p">{</span>
+    <span class="n">init</span> <span class="p">{</span>
+        <span class="n">println</span><span class="p">(</span><span class="s2">"init complete"</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>object에 최초로 접근했을 때 lazy하게 thread-safe한 방식으로 init 블록은 실행되고 인스턴스화 될 것 입니다. 이를 위해, 코틀린 object는 Java static initialization 블럭에 의존합니다. 위의 코틀린 object는 다음과 같은 자바 코드로 컴파일 될 것입니다:</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="kp">public</span> <span class="n">final</span> <span class="k">class</span> <span class="nc">SomeSingleton</span> <span class="p">{</span>
+   <span class="kp">public</span> <span class="n">static</span> <span class="n">final</span> <span class="no">SomeSingleton</span> <span class="no">INSTANCE</span><span class="p">;</span>
+
+   <span class="kp">private</span> <span class="no">SomeSingleton</span><span class="p">()</span> <span class="p">{</span>
+      <span class="no">INSTANCE</span> <span class="o">=</span> <span class="p">(</span><span class="no">SomeSingleton</span><span class="p">)</span><span class="n">this</span><span class="p">;</span>
+      <span class="no">System</span><span class="p">.</span><span class="nf">out</span><span class="p">.</span><span class="nf">println</span><span class="p">(</span><span class="s2">"init complete"</span><span class="p">);</span>
+   <span class="p">}</span>
+
+   <span class="n">static</span> <span class="p">{</span>
+      <span class="n">new</span> <span class="no">SomeSingleton</span><span class="p">();</span>
+   <span class="p">}</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>이는 복잡한 double-checked locking같은 locking 알고리즘에 의존하는 것 없이 thread-safe하고 lazy한 초기화를 가능하게 해주기 때문에 JVM에서 싱글톤을 구현하는 방법으로 선호됩니다. 코틀린에서 간단하게 object를 선언하면, 안전하고 효율적인 싱글톤 구현을 보장받을 수 있습니다.</p>
+
+<p><br /></p>
+
+<p><img src="https://cdn-images-1.medium.com/max/1600/1*UTrhe6ZuWbr9EXUERmMfbg.png" alt="cryingkotlin" /></p>
+
+<p><br /></p>
+
+<h3 id="인수-전달">인수 전달</h3>
+<p>만약 초기화 코드가 추가적인 인수를 필요로 한다면? 코틀린 object는 어떤 생성자도 가질 수 없기 때문에, 인수를 전달할 수 없습니다.</p>
+
+<p>싱글톤 초기화 블럭에 인수를 전달하는 유효한 케이스가 있는데, 추천하는 패턴입니다. 대안책은 싱글톤 클래스가 인수를 가져올 수 있도록 관심사 분리의 법칙을 위반하고 코드의 재사용성을 줄어지더라도 외부 컴포넌트를 인식할 수 있어야 함을 요합니다. 이 이슈를 완화하기 위한 외부 컴포넌트로 의존성 주입 시스템을 도입할 수 있습니다. 유효한 해결책이지만, 항상 그런 종류의 라이브러리를 사용하기를 원하지 않을 것이며 다음에 나오는 안드로이드 예제처럼 사용할 수 없는 경우도 있습니다.</p>
+
+<p>코틀린에서 싱글톤을 관리하는 다른 방식에 의존해야 하는 또다른 시나리오는 외부(Retrofit, Room, …)라이브러리 혹은 툴에 의해 생성되는 싱글톤의 구현체가 생성되고 그것의 인스턴스가 커스텀 빌더 혹은 팩토리 메서드를 사용하여 가져오게 되는 경우입니다. 이 경우에, 우리는 abstract class나 interface로 싱글톤을 선언하고 이는 객체가 될 수 없습니다.</p>
+
+<h3 id="안드로이드-use-case">안드로이드 use case</h3>
+
+<p>안드로이드 플랫폼에서, 당신은 싱글톤 컴포넌트가 Context로 파일 경로를 가져오거나 세팅을 읽거나 혹은 서비스에 접근할 수 있도록 초기화 블럭에 Context 인스턴스를 넘긴 경우가 종종 있을테지만, 당신은 <strong>Context에 대한 정적 참조를 유지하는 것</strong> 을 피하고 싶어 합니다. (applcation Context에 대한 정적 참조는 기술적으로 안전하지만). 이를 위한 두가지 방법이 있습니다:</p>
+
+<ul>
+  <li>
+    <p>Early initialization: 모든 컴포넌트는 (거의) 다른 코드가 실행되기 전에, applcation Context가 사용 가능한 Application.onCreate()의 시작 시점에, 그들의 public init 함수가 불리면서 초기화 됩니다. 이 간단한 해결책은 당장 사용되지 않는 것들도 초기화 하면서, 메인 스레드를 블락킹하면서 applcation 시작을 느리게 만드는 단점이 있습니다. 또 다른 덜 알려진 문제는 content provider가 이 메서드가 호출되기 전에 생성될 수 있어서 (documentation에 명시되어 있는대로), 만약 content provider가 글로벌 application component를 사용한다면, 그 component는 Application.onCreate() 전에 초기화 되거나 애플리케이션이 중단될 수 있다는 것입니다.</p>
+  </li>
+  <li>
+    <p>Lazy initialization: 추천하는 방법입니다. 컴포넌트는 싱글톤이고 인스턴스를 반환하는 함수는 Context 인수를 취합니다. 싱글톤 인스턴스는 처음 호출될 때 이 인수를 사용하여 초기화되고 생성될 것입니다. 이는 thread-safe하기 위해서 동기화 매커니즘이 필요합니다. 이 패턴을 사용하는 표준 Android component의 예는 LocalBroadcastManager입니다:</p>
+  </li>
+</ul>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="no">LocalBroadcastManager</span><span class="p">.</span><span class="nf">getInstance</span><span class="p">(</span><span class="n">context</span><span class="p">).</span><span class="nf">sendBroadcast</span><span class="p">(</span><span class="n">intent</span><span class="p">)</span></code></pre></figure>
+
+<h3 id="재사용-가능한-kotlin-구현">재사용 가능한 Kotlin 구현</h3>
+
+<p>우리는 싱글톤을 lazy하게 생성하고 초기화하기 위해서 인수와 함께 로직을 SingletonHolder 클래스 안에 캡슐화할 수 있습니다.
+로직을 thread-safe하게 만들기 위해서, 우리는 synchronized 알고리즘을 구현 할 필요가 있고 가장 효율적인 것은 - 또한 올바르게 사용하는 것이 가장 어렵긴 하지만 - double-checked locking 알고리즘입니다.</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="nb">open</span> <span class="k">class</span> <span class="nc">SingletonHolder</span><span class="o">&lt;</span><span class="n">out</span> <span class="no">T</span><span class="p">,</span> <span class="k">in</span> <span class="no">A</span><span class="o">&gt;</span><span class="p">(</span><span class="ss">creator: </span><span class="p">(</span><span class="no">A</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="no">T</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kp">private</span> <span class="n">var</span> <span class="ss">creator: </span><span class="p">((</span><span class="no">A</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="no">T</span><span class="p">)?</span> <span class="o">=</span> <span class="n">creator</span>
+    <span class="vi">@Volatile</span> <span class="kp">private</span> <span class="n">var</span> <span class="ss">instance: </span><span class="no">T</span><span class="p">?</span> <span class="o">=</span> <span class="n">null</span>
+
+    <span class="n">fun</span> <span class="n">getInstance</span><span class="p">(</span><span class="ss">arg: </span><span class="no">A</span><span class="p">):</span> <span class="no">T</span> <span class="p">{</span>
+        <span class="n">val</span> <span class="n">i</span> <span class="o">=</span> <span class="n">instance</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">i</span> <span class="o">!=</span> <span class="n">null</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="n">i</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">synchronized</span><span class="p">(</span><span class="n">this</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">val</span> <span class="n">i2</span> <span class="o">=</span> <span class="n">instance</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">i2</span> <span class="o">!=</span> <span class="n">null</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">i2</span>
+            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+                <span class="n">val</span> <span class="n">created</span> <span class="o">=</span> <span class="n">creator!</span><span class="o">!</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+                <span class="n">instance</span> <span class="o">=</span> <span class="n">created</span>
+                <span class="n">creator</span> <span class="o">=</span> <span class="n">null</span>
+                <span class="n">created</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>알고리즘이 제대로 동작하려면 instance field에 @Volatile 어노테이션을 추가해야 합니다.
+이는 가장 콤팩트하거나 우아한 코틀린 코드는 아니지만, double-checked locking 알고리즘을 위한 가장 효율적인 바이트 코드를 생성하는 코드입니다. 이에 관한 코틀린 저자의 말을 믿으세요: 이 코드는 실제로 기본적으로 동기화 되어있는 코틀린 표준 라이브러리의 lazy()함수 구현으로부터 직접 차용된 것입니다. 생성자 함수에 인수를 넘기는 것을 허용하도록 수정되어 왔습니다.</p>
+
+<p>이의 상대적 복잡성에 고려해 볼 때, 한 번 이상 쓰고 싶은 종류(혹은 읽고 싶은) 종류의 코드가 아니기 때문에, 목표는 당신이 인수를 가진 싱글톤을 구현해야 할 때마다 SingletonHolder 클래스를 재사용하는 것입니다.</p>
+
+<p>getInstance() 함수를 선언하는 논리적인 위치는 singleton 클래스의 companion 객체 안이며, 이는 Java의 정적 메서드와 비슷하게, 싱글톤 클래스를 qualifier로서 사용하여 호출될 수 있도록 합니다. <strong>코틀린 companion 객체가 제공하는 한가지 강력한 특징은 다른 객체와 같이 base 클래스로 부터 상속할 수 있다는 것이고</strong>, 이는 static-only 상속과 비교할 만한 것을 가능하게 해줍니다. 이 경우에, 우리는 재사용하고 자동으로 singleton 클래스의 getInstance() 함수를 노출(expose)하기 위해서, SingletonHolder를 싱글톤의 companion 객체에 대한 base class로 사용하기를 원합니다.</p>
+
+<p>생성자 함수를 인수로서 SingletonHolder 생성자에 전달하면, 커스텀 람다는 inline으로 선언될 수 있지만 일반적인 해결책은 singleton 클래스의 private 생성자에 레퍼런스를 전달하는 것 입니다. 인수를 가진 싱글톤에 대한 마지막 코드는 다음과 같습니다:</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="k">class</span> <span class="nc">Manager</span> <span class="kp">private</span> <span class="n">constructor</span><span class="p">(</span><span class="ss">context: </span><span class="no">Context</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">init</span> <span class="p">{</span>
+        <span class="sr">//</span> <span class="no">Init</span> <span class="n">using</span> <span class="n">context</span> <span class="n">argument</span>
+    <span class="p">}</span>
+
+    <span class="n">companion</span> <span class="n">object</span> <span class="p">:</span> <span class="no">SingletonHolder</span><span class="o">&lt;</span><span class="no">Manager</span><span class="p">,</span> <span class="no">Context</span><span class="o">&gt;</span><span class="p">(</span><span class="o">::</span><span class="no">Manager</span><span class="p">)</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>object 표기법처럼 짧지는 않지만, 다음으로 가장 좋은 것일 겁니다.
+싱글톤은 아마 다음과 같은 문법으로 호출될 것이고 이의 초기화는 lazy하고 thread-safe할 것입니다:</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="no">Manager</span><span class="p">.</span><span class="nf">getInstance</span><span class="p">(</span><span class="n">context</span><span class="p">).</span><span class="nf">doStuff</span><span class="p">()</span></code></pre></figure>
+
+<p>싱글톤 구현체가 외부 라이브러리에 의해 생성되고 빌더에 인수가 필요한 경우 또한 이 방법을 사용할 수 있습니다. Android <a href="https://developer.android.com/topic/libraries/architecture/room.html">Room Persistence Library</a>를 사용한 예제 입니다:</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="vi">@Database</span><span class="p">(</span><span class="n">entities</span> <span class="o">=</span> <span class="n">arrayOf</span><span class="p">(</span><span class="no">User</span><span class="o">::</span><span class="k">class</span><span class="p">),</span> <span class="n">version</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">abstract</span> <span class="k">class</span> <span class="nc">UsersDatabase</span> <span class="p">:</span> <span class="no">RoomDatabase</span><span class="p">()</span> <span class="p">{</span>
+
+    <span class="n">abstract</span> <span class="n">fun</span> <span class="n">userDao</span><span class="p">():</span> <span class="no">UserDao</span>
+
+    <span class="n">companion</span> <span class="n">object</span> <span class="p">:</span> <span class="no">SingletonHolder</span><span class="o">&lt;</span><span class="no">UsersDatabase</span><span class="p">,</span> <span class="no">Context</span><span class="o">&gt;</span><span class="p">({</span>
+        <span class="no">Room</span><span class="p">.</span><span class="nf">databaseBuilder</span><span class="p">(</span><span class="n">it</span><span class="p">.</span><span class="nf">applicationContext</span><span class="p">,</span>
+                <span class="no">UsersDatabase</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="nf">java</span><span class="p">,</span> <span class="s2">"Sample.db"</span><span class="p">)</span>
+                <span class="p">.</span><span class="nf">build</span><span class="p">()</span>
+    <span class="p">})</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>빌더가 인수를 필요로 하지 않을 경우, 대신에 간단하게 lazy 위임된 프로퍼티를 사용할 수 있습니다:</p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="n">interface</span> <span class="no">GitHubService</span> <span class="p">{</span>
+
+    <span class="n">companion</span> <span class="n">object</span> <span class="p">{</span>
+        <span class="n">val</span> <span class="ss">instance: </span><span class="no">GitHubService</span> <span class="n">by</span> <span class="n">lazy</span> <span class="p">{</span>
+            <span class="n">val</span> <span class="n">retrofit</span> <span class="o">=</span> <span class="no">Retrofit</span><span class="o">.</span><span class="no">Builder</span><span class="p">()</span>
+                    <span class="p">.</span><span class="nf">baseUrl</span><span class="p">(</span><span class="s2">"https://api.github.com/"</span><span class="p">)</span>
+                    <span class="p">.</span><span class="nf">build</span><span class="p">()</span>
+            <span class="n">retrofit</span><span class="p">.</span><span class="nf">create</span><span class="p">(</span><span class="no">GitHubService</span><span class="o">::</span><span class="k">class</span><span class="p">.</span><span class="nf">java</span><span class="p">)</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>유용하였기를 바랍니다. 만약 이 문제를 해결하기 위한 다른 방법을 제안하고 싶거나 질문이 있다면, 주저하지 말고 코멘트를 달아주세요. 읽어주셔서 감사합니다!</p>
+
+<p><br />
+<br />
+<br />
+<br />
+<br />
+<br /></p>
+<h3 id="추가">추가</h3>
+
+<hr />
+<p><br /></p>
+
+<h4 id="static-block은-클래스의-객체가-생성되었을-경우나-스테틱-멤버변수에-접근했을-경우에만-딱-한번만-실행됩니다">static block은 클래스의 객체가 생성되었을 경우나 스테틱 멤버변수에 접근했을 경우에만 딱 한번만 실행됩니다.</h4>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="sr">//</span> <span class="ss">filename: </span><span class="no">Main</span><span class="p">.</span><span class="nf">java</span>
+<span class="k">class</span> <span class="nc">Test</span> <span class="p">{</span>
+    <span class="n">static</span> <span class="n">int</span> <span class="n">i</span><span class="p">;</span>
+    <span class="n">int</span> <span class="n">j</span><span class="p">;</span>
+
+    <span class="sr">//</span> <span class="n">start</span> <span class="n">of</span> <span class="n">static</span> <span class="n">block</span>
+    <span class="n">static</span> <span class="p">{</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+        <span class="no">System</span><span class="p">.</span><span class="nf">out</span><span class="p">.</span><span class="nf">println</span><span class="p">(</span><span class="s2">"static block called "</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="sr">//</span> <span class="k">end</span> <span class="n">of</span> <span class="n">static</span> <span class="n">block</span>
+<span class="p">}</span>
+
+<span class="k">class</span> <span class="nc">Main</span> <span class="p">{</span>
+    <span class="kp">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="no">String</span> <span class="n">args</span><span class="p">[])</span> <span class="p">{</span>
+
+        <span class="sr">//</span> <span class="no">Although</span> <span class="n">we</span> <span class="n">don</span><span class="err">'</span><span class="n">t</span> <span class="n">have</span> <span class="n">an</span> <span class="n">object</span> <span class="n">of</span> <span class="no">Test</span><span class="p">,</span> <span class="n">static</span> <span class="n">block</span> <span class="n">is</span>
+        <span class="sr">//</span> <span class="n">called</span> <span class="n">because</span> <span class="n">i</span> <span class="n">is</span> <span class="n">being</span> <span class="n">accessed</span> <span class="k">in</span> <span class="n">following</span> <span class="n">statement</span><span class="o">.</span>
+        <span class="no">System</span><span class="p">.</span><span class="nf">out</span><span class="p">.</span><span class="nf">println</span><span class="p">(</span><span class="no">Test</span><span class="p">.</span><span class="nf">i</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>Output:
+static block called
+10</p>
+
+<p><br /></p>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="sr">//</span> <span class="ss">filename: </span><span class="no">Main</span><span class="p">.</span><span class="nf">java</span>
+<span class="k">class</span> <span class="nc">Test</span> <span class="p">{</span>
+    <span class="n">static</span> <span class="n">int</span> <span class="n">i</span><span class="p">;</span>
+    <span class="n">int</span> <span class="n">j</span><span class="p">;</span>
+    <span class="n">static</span> <span class="p">{</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+        <span class="no">System</span><span class="p">.</span><span class="nf">out</span><span class="p">.</span><span class="nf">println</span><span class="p">(</span><span class="s2">"static block called "</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="no">Test</span><span class="p">(){</span>
+        <span class="no">System</span><span class="p">.</span><span class="nf">out</span><span class="p">.</span><span class="nf">println</span><span class="p">(</span><span class="s2">"Constructor called"</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">class</span> <span class="nc">Main</span> <span class="p">{</span>
+    <span class="kp">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="no">String</span> <span class="n">args</span><span class="p">[])</span> <span class="p">{</span>
+
+       <span class="sr">//</span> <span class="no">Although</span> <span class="n">we</span> <span class="n">have</span> <span class="n">two</span> <span class="n">objects</span><span class="p">,</span> <span class="n">static</span> <span class="n">block</span> <span class="n">is</span> <span class="n">executed</span> <span class="n">only</span> <span class="n">once</span><span class="o">.</span>
+       <span class="no">Test</span> <span class="n">t1</span> <span class="o">=</span> <span class="n">new</span> <span class="no">Test</span><span class="p">();</span>
+       <span class="no">Test</span> <span class="n">t2</span> <span class="o">=</span> <span class="n">new</span> <span class="no">Test</span><span class="p">();</span>
+    <span class="p">}</span>
+<span class="p">}</span></code></pre></figure>
+
+<p>Output:
+static block called
+Constructor called
+Constructor called</p>
+
+<p><strong>(참고 : https://www.geeksforgeeks.org/g-fact-79/)</strong></p>
+
+<p><br />
+<br /></p>
+
+<h4 id="kotlin에는-static-keyword가-존재하지-않습니다-대신에-companion-키워드를-통해서-static하게-접근할-수-있도록-합니다">Kotlin에는 static keyword가 존재하지 않습니다. 대신에, companion 키워드를 통해서 static하게 접근할 수 있도록 합니다.</h4>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="sr">//</span> <span class="err">생성자</span> <span class="kp">private</span> <span class="err">처리</span>
+<span class="k">class</span> <span class="nc">ClassName</span> <span class="kp">private</span> <span class="n">constructor</span><span class="p">()</span> <span class="p">{</span>
+
+  <span class="sr">//</span> <span class="err">외부에서</span> <span class="n">static</span> <span class="err">형태로</span> <span class="err">접근</span> <span class="err">가능</span>
+  <span class="n">companion</span> <span class="n">object</span> <span class="p">{</span>
+    <span class="n">fun</span> <span class="n">getInstance</span><span class="p">()</span> <span class="o">=</span> <span class="no">ClassName</span><span class="p">()</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="sr">//</span> <span class="no">Use</span> <span class="n">kotlin</span>
+<span class="n">val</span> <span class="n">className</span> <span class="o">=</span> <span class="no">ClassName</span><span class="p">().</span><span class="nf">getInstance</span><span class="p">()</span>
+<span class="sr">//</span> <span class="no">Use</span> <span class="n">java</span>
+<span class="no">ClassName</span> <span class="n">className</span> <span class="o">=</span> <span class="no">ClassName</span><span class="o">.</span><span class="no">Companion</span><span class="p">.</span><span class="nf">getInstance</span><span class="p">();</span></code></pre></figure>
+
+<p><strong>(참고 : https://thdev.tech/kotlin/2016/10/09/Kotlin-Class.html)</strong></p>
+
+
+
+</div>
+
+<div class="pagination">
+  
+  
+    <a href="/post/2018/03/17/Thanks-for-the-memory,-Linux-(3.-How-the-Java-runtime-uses-native-memory).html" class="right arrow">&#8594;</a>
+  
+
+  <a href="#" class="top">Top</a>
+</div>
+
+<div id="disqus_thread"></div>
+<script>
+
+/**
+*  RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+*  LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables*/
+/*
+var disqus_config = function () {
+this.page.url = PAGE_URL;  // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = PAGE_IDENTIFIER; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+*/
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+s.src = 'https://https-jinjoochoi-github-io.disqus.com/embed.js';
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+                            
+
+    </main>
+
+    <footer>
+      <span>
+        &copy; <time datetime="2018-04-16 01:07:59 +0900">2018</time> Jinjoo Choi. Made with Jekyll using the <a href="https://github.com/chesterhow/tale/">Tale</a> theme.
+      </span>
+    </footer>
+  </body>
+</html>

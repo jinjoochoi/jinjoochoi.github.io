@@ -2,6 +2,10 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     
     <url>
+        <loc>https://jinjoochoi.github.io/post/2018/04/15/Kotlin-singletons-with-argument.html</loc>
+    </url>
+    
+    <url>
         <loc>https://jinjoochoi.github.io/post/2018/03/17/Thanks-for-the-memory,-Linux-(3.-How-the-Java-runtime-uses-native-memory).html</loc>
     </url>
     
